@@ -12,13 +12,18 @@
     cowsay
     lolcat
 
+
+    home-manager
   ];
 
   # Git managed by Home Manager
   programs.git = {
     enable = true;
-    userName = "Haru";
-    userEmail = "haruya.hinata.bubbles@gmail.com";
+
+    settings = {
+      user.name = "Haru";
+      user.email = "haruya.hinata.bubbles@gmail.com";
+    };
   };
 
   # Bash managed by Home Manager
