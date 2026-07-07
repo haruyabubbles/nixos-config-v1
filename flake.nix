@@ -19,7 +19,7 @@
     system = "x86_64-linux";
   in
   {
-    nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
+    nixosConfigurations.HaruaKimihiro = nixpkgs.lib.nixosSystem {
       inherit system;
 
       modules = [
@@ -33,7 +33,7 @@
           home-manager.useUserPackages = true;
 
           # User configuration file
-          home-manager.users.harua = import ./home.nix;
+          home-manager.users.harua = import ./users/harua/home.nix;
         }
       ];
     };
