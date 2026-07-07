@@ -19,7 +19,7 @@
     system = "x86_64-linux";
   in
   {
-    nixosConfigurations.HaruaKimihiro = nixpkgs.lib.nixosSystem {
+    nixosConfigurations.victus = nixpkgs.lib.nixosSystem {
       inherit system;
 
       modules = [
