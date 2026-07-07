@@ -23,7 +23,7 @@
       inherit system;
 
       modules = [
-        ./configuration.nix
+        ./hosts/victus/configuration.nix
 
         home-manager.nixosModules.home-manager
 
