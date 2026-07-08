@@ -8,6 +8,8 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      ../../modules/development.nix
+      ../../modules/audio.nix
     ];
 
   # Bootloader.
@@ -61,20 +63,7 @@
   services.printing.enable = true;
 
   # Enable sound with pipewire.
-  services.pulseaudio.enable = false;
-  security.rtkit.enable = true;
-  services.pipewire = {
-    enable = true;
-    alsa.enable = true;
-    alsa.support32Bit = true;
-    pulse.enable = true;
-    # If you want to use JACK applications, uncomment this
-    jack.enable = true;
-
-    # use the example session manager (no others are packaged yet so this is enabled by default,
-    # no need to redefine it in your config for now)
-    #media-session.enable = true;
-  };
+  # Inside audio.nix
 
   # Enable tailscale
   services.tailscale.enable = true;
@@ -107,96 +96,15 @@
 
   virtualisation.docker.enable = true;
 
-
-  hardware.graphics.enable = true;
-
-  services.xserver.videoDrivers = [ "nvidia" ];
-
-  hardware.nvidia = {
-    modesetting.enable = true;
-
-  # note for myself RTX4050 should be open=true because its support open kernal module
-    open = false;
-
-    nvidiaSettings = true;
-
-    prime = {
-      offload.enable = true;
-      intelBusId = "PCI:0:2:0";
-      nvidiaBusId = "PCI:1:0:0";
-    };
-  };
+  # NVIDIA on nvidia.nix
 
 
   # Allow unfree packages
-  nixpkgs.config.allowUnfree = true;
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
-  environment.systemPackages = with pkgs; [
   #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
   #  wget
-    spotify
-    telegram-desktop
-    discord
-
-    vscode
-    neovim
-    git
-    git-lfs
-
-    python3
-    nodejs
-    openjdk
-
-    gcc
-    gnumake
-
-    gimp
-    krita
-    obs-studio
-
-    vlc
-    mpv
-
-    heroic
-    lutris
-    mangohud
-    protonup-qt
-    gamescope
-
-    tmux
-    zoxide
-    ripgrep
-    fd
-    fzf
-    bat
-    eza
-
-    htop
-    btop
-    nvtopPackages.full
-
-    pciutils
-    usbutils
-
-    screen
-    minicom
-    gh
-    nmap
-
-    curl
-    wget
-    unzip
-    zip
-
-    libreoffice
-    python3Packages.jupyterlab
-    p7zip
-    tree
-    jq
-    fastfetch
-  ];
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
