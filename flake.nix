@@ -11,6 +11,9 @@
 
       # Make Home Manager use the same nixpkgs version
       inputs.nixpkgs.follows = "nixpkgs";
+
+      # nix-flatpak input
+      nix-flatpak.url = "github:gmodena/nix-flatpak";
     };
   };
 
@@ -26,6 +29,9 @@
         ./hosts/victus/configuration.nix
 
         home-manager.nixosModules.home-manager
+        
+        # Load nix-flatpak module into the system
+        nix-flatpak.nixosModules.nix-flatpak
 
         {
           # Home Manager settings

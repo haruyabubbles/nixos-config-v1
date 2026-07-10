@@ -10,6 +10,7 @@
       ./hardware-configuration.nix
       ../../modules/development.nix
       ../../modules/audio.nix
+      ../../modules/game.nix
     ];
 
   # Bootloader.
