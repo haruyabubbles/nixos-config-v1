@@ -70,5 +70,21 @@
     jq
     fastfetch
     scrcpy
+
+    # game packages
+    vulkan-tools
+    vulkan-loader
+
+    wineWowPackages.stable
+    dxvk
+
+    mesa-demos
+
+    sober
+
+    # other Program
+    obsidian
+    rofi
+
   ];
 }

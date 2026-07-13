@@ -1,16 +1,16 @@
+#{ ... }:
+
+#{
+# Ensure Flatpak paths are exported to your desktop environment
+#services.flatpak.enable = true;
+
+#}
+
 { config, pkgs, ... }:
 
 {
-  # Enable Flatpak and manage apps declaratively
-  services.flatpak = {
+  hardware.graphics = {
     enable = true;
-    
-    # Automatically configures the Flathub store
-    updateRemotes = true; 
-    
-    # Installs Sober automatically on rebuild
-    packages = [
-      "flathub:org.vinegarhq.Sober"
-    ];
+    enable32Bit = true;
   };
 }
