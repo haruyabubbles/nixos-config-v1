@@ -1,3 +1,3 @@
-final: prev: {
-  sober = final.callPackage ../pkgs/sober/default.nix { };
-}
+#final: prev: {
+#  sober = final.callPackage ../pkgs/sober/default.nix { };
+#}

@@ -11,7 +11,7 @@
       ../../modules/development.nix
       ../../modules/audio.nix
       #../../modules/game.nix
-      ../../modules/font.nix
+      #../../modules/font.nix
     ];
 
   nixpkgs.overlays = [ (import ../../overlays) ];
@@ -19,7 +19,7 @@
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
-  boot.loader.systemd-boot.configurationLimit = 3;
+  boot.loader.systemd-boot.configurationLimit = 6;
 
   networking.hostName = "victus"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
