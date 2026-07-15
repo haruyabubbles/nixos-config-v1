@@ -75,7 +75,7 @@
     vulkan-tools
     vulkan-loader
 
-    wineWowPackages.stable
+    #wineWowPackages.stable
     dxvk
 
     mesa-demos
@@ -85,6 +85,7 @@
     # other Program
     obsidian
     rofi
+    strace
 
   ];
 }

@@ -10,6 +10,7 @@
       ./hardware-configuration.nix
       ../../modules/development.nix
       ../../modules/audio.nix
+      ../../modules/nvidia.nix
       #../../modules/game.nix
       #../../modules/font.nix
     ];

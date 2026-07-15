@@ -1,6 +1,10 @@
 { config, pkgs, ... }:
 
 {
+
+  # Enable the GNOME Keyring dark service so libsecret can store your login tokens
+  services.gnome.gnome-keyring.enable = true;
+
   hardware.graphics = {
     enable = true;
     enable32Bit = true;
