@@ -8,7 +8,7 @@ let
 
     src = pkgs.fetchurl {
       url = "https://sober.vinegarhq.org/artifacts/2026-06-22_e24358e/c3e13e8abb1f0b8d02add53e0d1ad1cba3adff77822689fa574c1f6b746824de/sober-binaries-unified.tar.zst";
-      hash = "sha256-w+E+irsfC40CrdU+DRrRy6Ot/3eCJon6V0wfa3RoJN4=";
+      hash = "Its a secret";
     };
 
     nativeBuildInputs = [ pkgs.zstd ];
