@@ -11,11 +11,13 @@
       ../../modules/development.nix
       ../../modules/audio.nix
       ../../modules/nvidia.nix
+      ../../modules/nvidia.nix
+      ../../modules/flatpak.nix
       #../../modules/game.nix
       #../../modules/font.nix
     ];
 
-  nixpkgs.overlays = [ (import ../../overlays) ];
+  #nixpkgs.overlays = [ (import ../../overlays) ];
 
   # Bootloader.
   boot.loader.systemd-boot.enable = true;

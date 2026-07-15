@@ -14,11 +14,11 @@
 
     };
     # nix-flatpak input
-    #nix-flatpak.url = "github:gmodena/nix-flatpak";
+    nix-flatpak.url = "github:gmodena/nix-flatpak";
   };
 
-  #outputs = { self, nixpkgs, home-manager, nix-flatpak, ... }:
-  outputs = { self, nixpkgs, home-manager, ... }:
+  outputs = { self, nixpkgs, home-manager, nix-flatpak, ... }:
+  #outputs = { self, nixpkgs, home-manager, ... }:
   let
     system = "x86_64-linux";
   in
@@ -32,7 +32,7 @@
         home-manager.nixosModules.home-manager
         
         # Load nix-flatpak module into the system
-        #nix-flatpak.nixosModules.nix-flatpak
+        nix-flatpak.nixosModules.nix-flatpak
 
         {
           # Home Manager settings

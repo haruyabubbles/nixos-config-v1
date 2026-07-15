@@ -80,7 +80,7 @@
 
     mesa-demos
 
-    sober
+    #sober
 
     # other Program
     obsidian
