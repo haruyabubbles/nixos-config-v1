@@ -1,4 +1,4 @@
-  { config, pkgs, ... }:
+  { config, pkgs, inputs, ... }:
 
 {
   # Allow unfree packages
@@ -31,6 +31,7 @@
 
     vlc
     mpv
+    ani-cli
 
     heroic
     lutris
@@ -87,5 +88,21 @@
     rofi
     strace
 
+    n8n
+
+    # Replace system type (e.g., x86_64-linux)
+    inputs.lobster.packages.${pkgs.system}.lobster 
+
+
   ];
+
+  services.n8n = {
+    enable = true;
+    openFirewall = true; # Opens port 5678 by default
+    environment = {
+      N8N_PORT = "5678";
+      WEBHOOK_URL = "http://localhost:5678/";
+    };
+  };
+
 }

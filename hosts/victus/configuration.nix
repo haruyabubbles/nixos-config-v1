@@ -34,6 +34,18 @@
   # Enable networking
   networking.networkmanager.enable = true;
 
+  # Prevent the kernel from autosuspending network devices
+  services.udev.extraRules = ''
+    ACTION=="add", SUBSYSTEM=="net", KERNEL=="en*", ATTR{power/control}="on"
+  '';
+
+  # If use TLP, explicitly exclude network cards from power saving
+  services.tlp.settings = {
+    PCIE_ASPM_ON_AC = "performance";
+    PCIE_ASPM_ON_BAT = "default";
+  };
+
+  networking.networkmanager.dhcp = "internal"; # alternative: "dhcpcd"
 
   # Enable modern Nix commands and Flakes
   # This allows:
