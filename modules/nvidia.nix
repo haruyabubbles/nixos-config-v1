@@ -1,37 +1,123 @@
+# ============================================================
+# modules/nvidia.nix
+#
+# NVIDIA GPU driver and Intel/NVIDIA Prime Sync configuration.
+# Specific to: HP Victus with Intel UHD (iGPU) + NVIDIA RTX 4050 (dGPU).
+#
+# HOW IT LINKS:
+#   Imported by → hosts/victus/configuration.nix
+#   Affects     → modules/desktop/nnn.nix indirectly:
+#                 `hardware.nvidia.modesetting.enable = true` is
+#                 required for Wayland/Niri to work with NVIDIA.
+#                 The session variables in nnn.nix (GBM_BACKEND, etc.)
+#                 only work correctly when modesetting is on.
+#
+# LAPTOP GPU SETUP (PRIME):
+#   This laptop has two GPUs:
+#     - Intel UHD Graphics (iGPU) — always on, handles display output
+#     - NVIDIA RTX 4050 (dGPU)    — powerful, higher power draw
+#
+#   NVIDIA PRIME is the technology that lets both GPUs coexist.
+#   There are two modes:
+#
+#   1. PRIME Offload (not used here):
+#      iGPU runs everything by default (saves battery).
+#      You explicitly run apps on the NVIDIA GPU with:
+#        __NV_PRIME_RENDER_OFFLOAD=1 glxgears
+#        OR: nvidia-offload glxgears  (if offloadCmd is enabled)
+#
+#   2. PRIME Sync (used here):
+#      NVIDIA GPU renders everything; iGPU handles display output.
+#      Both GPUs stay active — higher power draw but zero tearing
+#      and better performance. This mode is required for Wayland.
+# ============================================================
 { config, pkgs, ... }:
 
 {
-
-  # Enable the GNOME Keyring dark service so libsecret can store your login tokens
+  # GNOME Keyring stores secrets (passwords, SSH keys, GPG keys)
+  # in an encrypted keyring that unlocks at login.
+  # Many apps (VSCode, Chrome, GNOME apps) use it via the
+  # libsecret API. Enabling it here makes it available regardless
+  # of which desktop session is running — Niri included.
   services.gnome.gnome-keyring.enable = true;
 
+  # hardware.graphics (formerly hardware.opengl) enables the Mesa
+  # OpenGL/Vulkan userspace libraries that apps link against.
+  # Without this, 3D acceleration doesn't work at all.
   hardware.graphics = {
+    # Enable Mesa OpenGL/Vulkan for 64-bit apps.
     enable = true;
+
+    # Also install the 32-bit Mesa libraries alongside the 64-bit ones.
+    # Required for: 32-bit Steam games, Wine/Proton, old games that
+    # ship 32-bit binaries. Without this, those apps fall back to
+    # software rendering (very slow) or crash entirely.
     enable32Bit = true;
   };
-  
+
+  # Tell the X server (and Wayland DRM) to load the nvidia driver.
+  # Even though our desktop is now Wayland-only, this option is
+  # still needed to load the nvidia kernel module and configure
+  # DRM (Direct Rendering Manager) for modesetting.
   services.xserver.videoDrivers = [ "nvidia" ];
 
   hardware.nvidia = {
+    # Kernel modesetting (KMS) allows the NVIDIA driver to control
+    # the display hardware directly at the kernel level.
+    # REQUIRED for Wayland — without this, Niri cannot start on NVIDIA.
+    # Also improves tty switching, suspend/resume, and HDR support.
     modesetting.enable = true;
 
+    # NVIDIA's own power management (systemd sleep hooks that save
+    # GPU state to RAM on suspend). Disabled because:
+    #   1. It can cause issues on some laptops with Prime Sync.
+    #   2. The Intel iGPU already handles display; the NVIDIA GPU can
+    #      be powered down by the system normally on suspend.
+    # Enable this if you experience suspend/resume problems.
     powerManagement.enable = false;
 
-  # note for myself RTX4050 should be open=true because its support open kernal module
-    open = false;
+    # Use the open-source NVIDIA kernel module (nvidia-open).
+    # NVIDIA released open-source kernel modules starting with
+    # the Turing architecture (RTX 20xx and newer). The RTX 4050
+    # is Ada Lovelace (newer than Turing) and fully supports it.
+    #
+    # BUG FIX: was false — using the proprietary module on Ada GPUs
+    # causes occasional stability issues and misses driver features.
+    # The open module is now the recommended choice for RTX 20xx+.
+    open = true;
 
+    # Install the `nvidia-settings` GUI configuration tool.
+    # Lets you adjust GPU clock offsets, fan curves, display settings,
+    # and inspect GPU status from a graphical interface.
     nvidiaSettings = true;
 
     prime = {
-      # Disable offload
+      # PRIME Offload mode — disabled.
+      # In offload mode you'd need to explicitly tag each app you want
+      # to run on the NVIDIA GPU. We use Sync mode instead (below).
       offload.enable = false;
+
+      # The `nvidia-offload` helper command — disabled because offload
+      # mode itself is disabled. This would add a convenience wrapper
+      # that sets the required environment variables automatically.
       offload.enableOffloadCmd = false;
 
-      # Enable sync mode
+      # PRIME Sync mode — enabled.
+      # The NVIDIA GPU renders all frames; the Intel iGPU's display
+      # engine outputs them to the screen. Both GPUs are always active.
+      # Benefits:
+      #   - No screen tearing (GPUs are synchronised via the iGPU's CRTC)
+      #   - Full NVIDIA performance for all apps automatically
+      #   - Required for Wayland to work with NVIDIA on this laptop
+      # Drawback: higher idle power draw (NVIDIA GPU never sleeps)
       sync.enable = true;
-      
-      intelBusId = "PCI:0:2:0";
-      nvidiaBusId = "PCI:1:0:0";
+
+      # PCI bus addresses of each GPU.
+      # Find yours with: lspci | grep -E "VGA|3D"
+      # The format is PCI:bus:device:function (decimal, not hex).
+      # lspci shows hex (e.g. 00:02.0) — convert: 0x00=0, 0x02=2, 0x0=0 → PCI:0:2:0
+      intelBusId  = "PCI:0:2:0"; # Intel UHD Graphics (iGPU) — handles display output
+      nvidiaBusId = "PCI:1:0:0"; # NVIDIA RTX 4050 (dGPU)    — handles rendering
     };
   };
 }
