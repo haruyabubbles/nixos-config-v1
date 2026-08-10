@@ -34,7 +34,7 @@
     # ----------------------------------------------------------
     spotify          # Music streaming client (unfree)
     telegram-desktop # Telegram messenger desktop client
-    discord          # Voice/text chat for gaming and communities (unfree)
+    vesktop          # Voice/text chat for gaming and communities (unfree)
 
     # ----------------------------------------------------------
     # EDITORS & VERSION CONTROL

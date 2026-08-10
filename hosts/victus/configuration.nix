@@ -5,12 +5,16 @@
 # (HP Victus laptop with Intel iGPU + NVIDIA RTX 4050, RTL8852BE-VT WiFi).
 #
 # Module layout:
-#   hardware-configuration.nix  — auto-generated: filesystems, kernel modules
-#   modules/development.nix     — dev tools, languages, editors
-#   modules/audio.nix           — PipeWire / sound setup
-#   modules/nvidia.nix          — NVIDIA + Intel Prime Sync, hardware.graphics
-#   modules/flatpak.nix         — Flatpak + Flathub remote
-#   modules/desktop/nnn.nix     — Niri + Noctalia + greetd (NNN stack)
+#   hardware-configuration.nix       — auto-generated: filesystems, kernel modules
+#   modules/development.nix          — dev tools, languages, editors, services
+#   modules/audio.nix                — PipeWire audio stack + quality tuning
+#   modules/nvidia.nix               — NVIDIA + Intel Prime Sync, hardware.graphics
+#   modules/flatpak.nix              — Flatpak + Flathub remote
+#   modules/performance.nix          — zram, earlyoom, thermald, irqbalance, sysctl
+#   modules/gpu-switch.nix           — envycontrol, nvidia-run / intel-run wrappers
+#   modules/desktop/nnn.nix          — Niri + Noctalia + greetd (NNN stack)
+#   modules/desktop/desktop-apps.nix — Cinnamon-equivalent app suite for NNN stack
+#   modules/font.nix                 — font packages + fontconfig tuning
 # ============================================================
 { config, pkgs, ... }:
 
@@ -22,10 +26,10 @@
       # Do not edit by hand — re-run nixos-generate-config if hardware changes.
       ./hardware-configuration.nix
 
-      # Developer tooling (languages, LSPs, editors, etc.)
+      # Developer tooling (languages, LSPs, editors, CLI tools, services)
       ../../modules/development.nix
 
-      # Audio stack (PipeWire, wireplumber, bluetooth audio codecs)
+      # Audio stack (PipeWire, wireplumber, bluetooth audio codecs, EQ config)
       ../../modules/audio.nix
 
       # NVIDIA driver configuration + Intel/NVIDIA Prime Sync
@@ -34,15 +38,35 @@
       # Flatpak support (declarative Flatpak app installation)
       ../../modules/flatpak.nix
 
+      # System performance tuning:
+      #   - zram swap (NO SWAP was causing hard OOM freezes)
+      #   - earlyoom (prevent system freezes on memory pressure)
+      #   - irqbalance (spread IRQs across all CPU cores)
+      #   - thermald (smooth Intel thermal management)
+      #   - sysctl tuning (swappiness, inotify, dirty pages, TCP)
+      #   - I/O scheduler per device type (nvme=none, sata-ssd=deadline)
+      ../../modules/performance.nix
+
+      # GPU switching support:
+      #   - envycontrol (switch between integrated/hybrid/nvidia modes)
+      #   - nvidia-run / intel-run wrapper scripts
+      #   - gpu-info summary command
+      ../../modules/gpu-switch.nix
+
       # NNN desktop stack: Niri + Noctalia + greetd
-      # This replaces the old Cinnamon + LightDM setup.
+      # Replaces the old Cinnamon + LightDM setup.
       ../../modules/desktop/nnn.nix
 
-      # Uncomment to enable gaming packages (Steam, Lutris, etc.)
-      #../../modules/game.nix
+      # Cinnamon-equivalent application suite for the NNN stack:
+      #   pavucontrol, easyeffects, blueman, wdisplays, nwg-look,
+      #   file-roller, loupe, gnome apps, evince, wlogout, etc.
+      ../../modules/desktop/desktop-apps.nix
 
       # Font packages and fontconfig tuning (JetBrains Mono NF, Noto, Inter, etc.)
       ../../modules/font.nix
+
+      # Uncomment to enable gaming packages (Steam, Lutris, etc.)
+      #../../modules/game.nix
     ];
 
   # Overlays let you patch or replace packages from nixpkgs.
@@ -60,7 +84,7 @@
   boot.loader.efi.canTouchEfiVariables = true;
 
   # Keep only the last 6 NixOS generations in the boot menu.
-  # Older generations are still garbage-collected separately by nix.gc below.
+  # Older generations are still garbage-collected by nix.gc below.
   boot.loader.systemd-boot.configurationLimit = 6;
 
   # ============================================================
@@ -86,16 +110,15 @@
   # Disable WiFi power-save at the NetworkManager level too.
   # NM_SETTING_WIRELESS_POWERSAVE_DISABLE = 2 means "always disabled".
   # This works alongside the udev rule above for belt-and-suspenders coverage.
-  # extraConfig was removed in 26.05; we use structured settings now.
   networking.networkmanager.settings.connection."wifi.powersave" = 2;
 
-  # Use NixOS's built-in DHCP client (networkd) instead of the external
-  # dhclient binary. Faster and integrates better with systemd-networkd.
+  # Use NixOS's built-in DHCP client (networkd) instead of dhclient.
+  # Faster and integrates better with systemd-networkd.
   networking.networkmanager.dhcp = "internal";
 
   # BUG FIX: The RTL8852BE-VT (rtw89_pci driver) was silently entering
   # PCIe low-power states (L1 substates) after connecting to WiFi,
-  # causing the card to lose association with the AP ("connected but no internet").
+  # causing "connected but no internet" association drops.
   # These modprobe options disable the problematic ASPM states for this card only.
   boot.extraModprobeConfig = ''
     options rtw89_pci disable_clkreq=1 disable_aspm_l1=1 disable_aspm_l1ss=1
@@ -105,22 +128,22 @@
   # NIX SETTINGS
   # ============================================================
 
-  # Enable the modern `nix` CLI (nix build, nix shell, etc.)
-  # and Flakes support. Both are still experimental but stable
-  # enough to be required by this configuration.
   nix.settings = {
+    # Enable the modern `nix` CLI (nix build, nix shell, etc.) and Flakes.
     experimental-features = [
       "nix-command"
       "flakes"
     ];
 
     # Use all CPU cores for parallel builds and downloads.
-    # "auto" = one job per logical CPU core.
     max-jobs = "auto";
 
-    # Allow each job to use all available cores (for packages that
-    # support parallel compilation, e.g. LLVM, Rust crates).
+    # Allow each job to use all available cores for parallel compilation
+    # (useful for LLVM, Rust crates, large C++ projects).
     cores = 0;
+
+    # Trust the local user so they can use binary caches without sudo.
+    trusted-users = [ "root" "harua" ];
   };
 
   # Automatically delete old store paths weekly.
@@ -132,7 +155,7 @@
   };
 
   # Deduplicate identical files in /nix/store using hard links.
-  # Saves several GB on systems with many similar packages (e.g. dev shells).
+  # Saves several GB on systems with many similar packages.
   nix.optimise.automatic = true;
 
   # ============================================================
@@ -140,37 +163,38 @@
   # ============================================================
 
   time.timeZone = "America/Toronto";
-
-  # en_CA.UTF-8 = Canadian English with UTF-8 encoding.
   i18n.defaultLocale = "en_CA.UTF-8";
 
   # ============================================================
   # DISPLAY SERVER
-  # We keep X11 enabled even though our desktop session is now
-  # fully Wayland (Niri). Reasons:
-  #   1. `services.xserver.videoDrivers = ["nvidia"]` in nvidia.nix
-  #      still routes through this option to load the nvidia kernel
-  #      module and configure DRM.
-  #   2. XWayland (X11 compatibility layer inside Niri) is included
-  #      automatically; some apps still need it.
-  #   3. The xkb layout below sets keyboard layout for both X and
-  #      Wayland sessions.
-  # The old `displayManager.lightdm` and `desktopManager.cinnamon`
-  # lines have been removed — greetd + Niri replace them (see nnn.nix).
+  # We keep X11 enabled even though our desktop session is fully Wayland.
+  # Reasons:
+  #   1. `services.xserver.videoDrivers = ["nvidia"]` in nvidia.nix still
+  #      routes through this option to load the NVIDIA kernel module.
+  #   2. XWayland (X11 compatibility layer) is included automatically.
+  #   3. The xkb layout below sets keyboard layout for both X and Wayland.
   # ============================================================
   services.xserver.enable = true;
 
   services.xserver.xkb = {
-    layout = "us";
-    variant = ""; # Default US layout, no variant
+    layout  = "us";
+    variant = "";
   };
 
   # ============================================================
   # SYSTEM SERVICES
   # ============================================================
 
-  # Enable CUPS for local and network printing support.
+  # CUPS — local and network printing.
   services.printing.enable = true;
+
+  # Avahi — mDNS/DNS-SD for network service discovery.
+  # Required for CUPS to discover network printers automatically.
+  services.avahi = {
+    enable = true;
+    nssmdns4 = true; # let apps resolve .local hostnames
+    openFirewall = true;
+  };
 
   # Tailscale — mesh VPN. Allows secure access to other Tailscale
   # nodes (home server, VMs, etc.) without port forwarding.
@@ -182,12 +206,15 @@
 
   users.users."harua" = {
     isNormalUser = true;
-    description = "Haru Afzal";
-    extraGroups = [
+    description  = "Haru Afzal";
+    extraGroups  = [
       "networkmanager" # Manage network connections without sudo
       "wheel"          # sudo access
-      "docker"         # Run Docker without sudo
+      "docker"         # Run Docker containers without sudo
       "wireshark"      # Capture packets without root (dumpcap setcap)
+      "audio"          # Direct ALSA audio access (backup if PipeWire fails)
+      "video"          # Access to video devices and display brightness
+      "input"          # Access to input devices (needed by some games / tools)
     ];
     packages = with pkgs; []; # User packages are managed by home-manager instead
   };
@@ -196,22 +223,30 @@
   # PROGRAMS
   # ============================================================
 
-  # Firefox — installed system-wide so it gets the NixOS policy wrapper
-  # and native messaging hosts (e.g. for extensions that need system access).
+  # Firefox — system-wide install for the NixOS policy wrapper and
+  # native messaging hosts (e.g. for extensions needing system access).
   programs.firefox.enable = true;
 
-  # Steam — the gaming platform. openFirewall opens the ports Steam needs
-  # for Remote Play and dedicated server discovery on the LAN.
+  # Steam — gaming platform. openFirewall opens ports for Remote Play
+  # and dedicated server discovery on the LAN.
   programs.steam = {
     enable = true;
-    remotePlay.openFirewall = true;      # Remote Play streaming ports
-    dedicatedServer.openFirewall = true; # Dedicated server discovery ports
+    remotePlay.openFirewall      = true;
+    dedicatedServer.openFirewall = true;
+    # Gamescope integration: enables the gamescope session launcher in Steam.
+    # gamescope is a micro-compositor that lets games run at custom resolutions
+    # and framerates without affecting the desktop.
+    gamescopeSession.enable = true;
   };
 
-  # Wireshark — packet capture tool. The NixOS module gives the dumpcap
-  # binary the required CAP_NET_RAW capability so users in the "wireshark"
-  # group can capture without being root.
+  # Wireshark — packet capture. The NixOS module gives dumpcap the required
+  # CAP_NET_RAW so users in the "wireshark" group can capture without root.
   programs.wireshark.enable = true;
+
+  # Gamescope — Wayland micro-compositor for running games.
+  # Needed separately from Steam for non-Steam use (e.g. running any app
+  # inside gamescope for resolution/framerate control).
+  programs.gamescope.enable = true;
 
   # ============================================================
   # VIRTUALISATION
@@ -222,11 +257,24 @@
   virtualisation.docker.enable = true;
 
   # ============================================================
-  # NVIDIA — see modules/nvidia.nix for full driver config
+  # SYSTEM PACKAGES
   # ============================================================
+  # Minimal set here — most packages live in development.nix or desktop-apps.nix.
+  environment.systemPackages = with pkgs; [
+    # Archive tool (needed by many installers and scripts)
+    p7zip     # 7z, handles .7z, .rar, and many formats beyond zip/tar
+    unrar     # Extract .rar archives (proprietary format)
 
-  # The NixOS state version. Do NOT change this after the initial install.
-  # It controls the format of stateful data (e.g. /var, user home dirs).
+    # GPU info tools (referenced in gpu-switch.nix scripts)
+    pciutils  # lspci — list PCI devices
+    usbutils  # lsusb — list USB devices
+  ];
+
+  # ============================================================
+  # SYSTEM STATE VERSION
+  # ============================================================
+  # Do NOT change this after the initial install.
+  # Controls the format of stateful data (/var, user home dirs).
   # Changing it does not upgrade anything — it just breaks assumptions.
   system.stateVersion = "26.05";
 }

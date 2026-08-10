@@ -3,69 +3,72 @@
 #
 # The NNN stack: NixOS + Niri + Noctalia
 #
-# Niri   — scrollable-tiling Wayland compositor (window manager)
+# Niri     — scrollable-tiling Wayland compositor (window manager)
 # Noctalia — integrated desktop shell: bar, launcher, notifications,
 #            lock screen, wallpaper picker, control center, etc.
-# greetd  — lightweight display/login manager for Wayland
+# greetd   — lightweight display/login manager for Wayland
 #
-# This module replaces the Cinnamon + LightDM setup that was here
-# before. Everything Wayland-native, no X11 desktop session.
+# HOW IT LINKS:
+#   Imported by → hosts/victus/configuration.nix
+#   Works with  → modules/desktop/desktop-apps.nix (per-DE app suite)
+#                 modules/nvidia.nix (GBM/GLX env vars depend on modesetting)
+#                 users/harua/home.nix (Noctalia home module settings)
+#
+# WHAT WAS REMOVED vs CINNAMON SETUP:
+#   - services.displayManager.lightdm → replaced by services.greetd (below)
+#   - services.desktopManager.cinnamon → replaced by programs.niri + programs.noctalia
+#   - Cinnamon app suite → see modules/desktop/desktop-apps.nix
 # ============================================================
-{ config, pkgs, inputs, ... }:
+{ config, pkgs, lib, inputs, ... }:
 
 {
   # Pull in Noctalia's NixOS module, which provides the
   # `programs.noctalia` option used below.
-  # The module is sourced from the noctalia flake input in flake.nix.
   imports = [
     inputs.noctalia.nixosModules.default
   ];
 
   # ============================================================
-  # NIRI — Window Manager
+  # NIRI — Window Manager / Wayland Compositor
   # ============================================================
-
   # Enabling niri:
   #   - Installs the niri package
   #   - Registers a Wayland desktop session entry (used by greetd)
   #   - Sets up PAM rules so niri can lock the screen
-  #   - Enables polkit (needed for privilege dialogs in Wayland)
+  #   - Enables polkit (needed for privilege escalation dialogs)
   programs.niri.enable = true;
 
   # ============================================================
   # NOCTALIA — Desktop Shell
   # ============================================================
-
   programs.noctalia = {
     enable = true;
 
-    # recommendedServices.enable = true automatically enables a
-    # curated set of system services that Noctalia's widgets depend on:
-    #   - power-profiles-daemon  (power profile switcher in control center)
-    #   - upower                 (battery info)
-    #   - bluetooth / bluez      (Bluetooth control panel)
-    #   - and other small helpers
+    # recommendedServices.enable = true automatically enables:
+    #   - power-profiles-daemon  (power mode switcher in the control center)
+    #   - upower                 (battery info, low-battery notifications)
+    #   - bluetooth / bluez      (Bluetooth control panel in the shell)
+    #   - other small helpers
+    # NOTE: power-profiles-daemon conflicts with TLP and cpuFreqGovernor.
+    # Do NOT set powerManagement.cpuFreqGovernor with this enabled.
     recommendedServices.enable = true;
 
-    # Start Noctalia as a proper systemd user service instead of using
-    # niri's spawn-at-startup. Benefits:
-    #   - Noctalia is pre-warmed before you interact with it → launcher opens instantly
-    #   - Clean lifecycle: systemd restarts it on crash automatically
-    #   - No double-start race condition
-    # IMPORTANT: with this enabled, remove `spawn-at-startup "noctalia"`
-    # from ~/.config/niri/config.kdl (already done).
+    # Run Noctalia as a systemd user service (pre-warmed before login).
+    # Benefits over niri's spawn-at-startup:
+    #   - Launcher opens instantly (Noctalia is already running)
+    #   - Systemd restarts it automatically on crash
+    #   - No race condition with niri startup
+    # IMPORTANT: with this enabled, do NOT have `spawn-at-startup "noctalia"`
+    # in ~/.config/niri/config.kdl — it would double-start noctalia.
     systemd.enable = true;
   };
 
   # ============================================================
   # BINARY CACHE
-  # Noctalia is not in nixpkgs, so without a cache every rebuild
-  # would compile it from source (slow — can take 20+ minutes).
-  # These settings tell Nix to fetch pre-built binaries from
-  # Noctalia's Cachix cache instead.
-  #
-  # The public key below lets Nix verify the binaries are genuine
-  # and haven't been tampered with.
+  # Noctalia is not in nixpkgs; without a cache every rebuild would
+  # compile it from source (~20+ minutes). These settings tell Nix to
+  # fetch pre-built binaries from Noctalia's Cachix cache.
+  # The public key verifies the binaries haven't been tampered with.
   # ============================================================
   nix.settings = {
     extra-substituters = [ "https://noctalia.cachix.org" ];
@@ -76,14 +79,17 @@
 
   # ============================================================
   # GREETD — Display / Login Manager
-  # Replaces LightDM. greetd is a minimal Wayland-friendly login
-  # manager; tuigreet is its terminal-based greeter UI.
   # ============================================================
+  # Replaces LightDM. greetd is minimal, Wayland-native, and starts
+  # any registered Wayland session (niri, sway, etc.) listed in
+  # /share/wayland-sessions. tuigreet is its terminal-based greeter UI.
   services.greetd = {
     enable = true;
     settings = {
       default_session = {
-        command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --sessions ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions";
+        # tuigreet was moved out of the greetd package set in nixpkgs 26.05.
+        # Use pkgs.tuigreet directly instead of pkgs.greetd.tuigreet.
+        command = "${pkgs.tuigreet}/bin/tuigreet --time --sessions ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions";
         user = "greeter";
       };
     };
@@ -92,86 +98,190 @@
   # ============================================================
   # REQUIRED HARDWARE SERVICES
   # ============================================================
+  hardware.bluetooth = {
+    enable = true;
+    # Enable power control (allow `bluetoothctl power on` without sudo)
+    powerOnBoot = true;
+    # Better Bluetooth audio: enable experimental features needed for
+    # high-quality codecs (AAC, aptX HD, LDAC) and battery reporting.
+    settings.Policy.AutoEnable = "true";
+  };
 
-  hardware.bluetooth.enable = true;
   services.upower.enable = true;
   security.polkit.enable = true;
 
+  # GNOME Keyring — stores passwords/SSH keys/GPG keys encrypted at rest.
+  # Enabled here (not just nvidia.nix) for clarity. No-op if already set.
+  services.gnome.gnome-keyring.enable = true;
+
+  # ============================================================
+  # AT-SPI — Accessibility Bus
+  # ============================================================
+  # AT-SPI (Assistive Technology Service Provider Interface) is the
+  # D-Bus accessibility infrastructure. Many GTK apps register with it
+  # at startup and log warnings / slow down if it's not present.
+  # Enabling it silences those warnings even if you don't use accessibility tools.
+  services.gnome.at-spi2-core.enable = true;
+
   # ============================================================
   # XDG DESKTOP PORTAL
-  # Portals let sandboxed/Wayland apps request system services
-  # (file picker, screen share, notifications) through D-Bus.
-  #
-  #   xdg-desktop-portal-gtk  — file dialogs, app chooser
-  #   xdg-desktop-portal-gnome — screen share (pipewire), better
-  #                               file picker for GTK4 apps
   # ============================================================
+  # Portals let sandboxed apps request system services (file picker,
+  # screen share, notifications) through D-Bus without direct FS access.
+  #
+  # xdg-desktop-portal-gtk:  file picker, app chooser for GTK apps
+  # xdg-desktop-portal-gnome: screen sharing (PipeWire), better GTK4 file picker
+  #
+  # The wlr portal (for wlroots-based compositors including Niri) is
+  # pulled in automatically by programs.niri.enable.
   xdg.portal = {
     enable = true;
     extraPortals = [
       pkgs.xdg-desktop-portal-gtk
       pkgs.xdg-desktop-portal-gnome
     ];
+    # Portal backend routing for niri sessions.
+    # lib.mkForce is required to override the niri NixOS module which sets
+    # default="gnome;gtk". The GNOME portal refuses FileChooser outside GNOME
+    # Shell, so GTK must be first. GNOME handles ScreenCast/Screenshot via
+    # PipeWire (no shell dependency needed for those interfaces).
+    config.niri = {
+      default                                          = lib.mkForce [ "gtk" ];
+      "org.freedesktop.impl.portal.FileChooser"        = lib.mkForce [ "gtk" ];
+      "org.freedesktop.impl.portal.Access"             = lib.mkForce [ "gtk" ];
+      "org.freedesktop.impl.portal.Notification"       = lib.mkForce [ "gtk" ];
+      "org.freedesktop.impl.portal.Screenshot"         = lib.mkForce [ "gnome" ];
+      "org.freedesktop.impl.portal.ScreenCast"         = lib.mkForce [ "gnome" ];
+      "org.freedesktop.impl.portal.RemoteDesktop"      = lib.mkForce [ "gnome" ];
+      "org.freedesktop.impl.portal.Secret"             = lib.mkForce [ "gnome-keyring" ];
+    };
+    # Fallback for any non-niri session.
+    config.common.default = lib.mkForce [ "gtk" ];
   };
 
   # ============================================================
   # WAYLAND + NVIDIA ENVIRONMENT VARIABLES
-  # These are set for every user session on the machine.
+  # Set for every user session on the machine.
   # ============================================================
   environment.sessionVariables = {
-    # Tell Electron/Chrome apps to run in Wayland mode natively
+    # Tell Electron/Chrome apps to run native Wayland mode.
+    # Without this they run via XWayland (blurry on HiDPI, higher latency).
     NIXOS_OZONE_WL = "1";
 
-    # Use the nvidia-drm GBM backend for Wayland framebuffer allocation
+    # Use the nvidia-drm GBM backend for Wayland framebuffer allocation.
+    # Required for NVIDIA + Wayland. Without this Niri can't create surfaces.
     GBM_BACKEND = "nvidia-drm";
 
-    # Force NVIDIA's GLX implementation
+    # Force NVIDIA's GLX implementation instead of Mesa's software fallback.
     __GLX_VENDOR_LIBRARY_NAME = "nvidia";
 
-    # Use NVIDIA for VAAPI hardware video decode
+    # Use NVIDIA's VAAPI driver for hardware video decode.
+    # Enables hardware-accelerated video in Firefox, mpv, VLC, etc.
     LIBVA_DRIVER_NAME = "nvidia";
 
-    # Hint to apps that this is a Wayland session
+    # Tell apps that this is a Wayland session.
+    # Used by GTK4, SDL2, and other toolkits to pick the right backend.
     XDG_SESSION_TYPE = "wayland";
 
-    # Force Qt apps to use the native Wayland backend (no XWayland)
-    QT_QPA_PLATFORM = "wayland";
+    # Force Qt 5 and Qt 6 apps to use the native Wayland platform plugin.
+    # Without this they fall back to XCB (XWayland) which doesn't support
+    # fractional scaling, HDR, or high-resolution mouse events.
+    QT_QPA_PLATFORM = "wayland;xcb"; # fallback to XCB if Wayland init fails
 
-    # Qt 5 apps: use Wayland platform plugin and GTK style
+    # Disable Qt client-side window decorations on Wayland.
+    # Niri provides server-side decorations; client-side decorations on
+    # Wayland look wrong and conflict.
     QT_WAYLAND_DISABLE_WINDOWDECORATION = "1";
+
+    # SDL2: prefer Wayland over X11 for game windows.
+    # Many older games use SDL2; this makes them run natively on Wayland.
+    SDL_VIDEODRIVER = "wayland,x11"; # comma-separated fallback list
+
+    # Java/AWT: run Java GUIs on XWayland with scaling hints.
+    # Pure Wayland Java GUIs are not yet stable; XWayland with this hint
+    # gives acceptable HiDPI behaviour.
+    _JAVA_AWT_WM_NONREPARENTING = "1";
+
+    # CLUTTER: use the Wayland backend (for GNOME apps that use Clutter).
+    CLUTTER_BACKEND = "wayland";
+
+    # GDK: hint all GTK 3 apps to use the Wayland backend.
+    # GTK 4 detects this automatically; GTK 3 may need the explicit hint.
+    GDK_BACKEND = "wayland,x11"; # fallback to X11 for apps that don't support Wayland
   };
 
   # ============================================================
-  # SYSTEM PACKAGES
+  # SYSTEM PACKAGES — Core Desktop Utilities
   # ============================================================
+  # These are the base packages the NNN compositor stack needs.
+  # Full app suite is in modules/desktop/desktop-apps.nix.
   environment.systemPackages = with pkgs; [
-    # Terminals
-    foot        # lightweight Wayland-native terminal (fallback)
-    kitty       # GPU-accelerated terminal with Catppuccin theme support
+    # ---- Terminals ----------------------------------------------
+    foot    # Lightweight Wayland-native terminal — fast, minimal, good fallback
+    kitty   # GPU-accelerated terminal — configured in home.nix with Catppuccin
+    alacritty # Another GPU-accelerated terminal (cross-platform, Rust-based)
+
+    # ---- Clipboard ----------------------------------------------
+    wl-clipboard  # wl-copy / wl-paste — Wayland clipboard CLI tools
+    cliphist      # Clipboard history daemon (stores entries from wl-paste)
+
+    # wl-clip-persist: keeps clipboard contents alive after the source
+    # app closes. On Wayland the clipboard is "owned" by the app that
+    # copied — if you copy from Firefox then close the tab, the clipboard
+    # dies. wl-clip-persist runs as a background daemon and takes ownership
+    # of the clipboard so its content survives the source app closing.
+    # Run at login: add `spawn-at-startup "wl-clip-persist --clipboard both"`
+    # to ~/.config/niri/config.kdl, or use the systemd service in home.nix.
+    wl-clip-persist
+
+    # ---- Screenshot / Screen tools ------------------------------
+    grim    # Wayland screenshot: captures a display or region to PNG
+    slurp   # Interactive region/window selector for use with grim/wf-recorder
+    swappy  # Screenshot annotation tool: draw, text, blur, then save/copy
+
+    # ---- App Launcher ------------------------------------------
+    fuzzel  # Fast Wayland-native dmenu launcher (used for clipboard picker too)
+    rofi    # Featureful launcher (X11 + XWayland mode; also has Wayland branch)
+
+    # ---- Media / Brightness Keys --------------------------------
+    playerctl     # MPRIS media player control (play/pause/next/prev/seek)
+    brightnessctl # Laptop display backlight brightness control
+
+    # ---- File Manager ------------------------------------------
+    nemo  # Cinnamon's file manager — familiar and full-featured
+
+    # ---- System Info -------------------------------------------
+    fastfetch  # Modern neofetch replacement — fast system info display
+
+    # ---- Color Tools -------------------------------------------
+    hyprpicker     # Screen color picker (Wayland-native, copies hex to clipboard)
+    wl-color-picker # GUI color picker with Wayland support
+
+    # ---- Polkit Agent ------------------------------------------
+    # polkit_gnome provides the graphical "Enter password to continue" dialog.
+    # When an app needs elevated privileges (e.g. Disks app formatting a drive),
+    # polkit_gnome pops up a dialog instead of silently failing.
     polkit_gnome
 
-    # Clipboard
-    wl-clipboard  # wl-copy / wl-paste — Wayland clipboard CLI
-    cliphist      # clipboard history daemon (stores wl-paste output)
+    # ---- Logout / Power ----------------------------------------
+    # wlogout: Wayland logout screen with shutdown/reboot/lock/suspend buttons.
+    # Bind to Mod+Shift+E in ~/.config/niri/config.kdl:
+    #   Mod+Shift+E { spawn "wlogout"; }
+    wlogout
 
-    # Screenshot tools
-    grim          # Wayland screenshot capture
-    slurp         # Interactive region/window selector for grim
-    swappy        # Screenshot annotation and editing tool
+    # ---- Idle Management ----------------------------------------
+    # swayidle: runs commands after N seconds of user inactivity.
+    # Works on all Wayland compositors (not just sway).
+    # Example usage (add to niri spawn-at-startup or a systemd user service):
+    #   swayidle -w \
+    #     timeout 300 'noctalia lock' \         # lock screen after 5 min
+    #     timeout 600 'systemctl suspend' \      # suspend after 10 min
+    #     before-sleep 'noctalia lock'           # lock before suspend
+    swayidle
 
-    # Launcher (used for clipboard history picker)
-    fuzzel        # Fast Wayland-native dmenu-compatible launcher
-
-    # Media and brightness keys (used in niri keybinds)
-    playerctl     # MPRIS media player control (play/pause/next/prev)
-    brightnessctl # Laptop backlight control
-
-    # File manager
-    nemo          # Cinnamon file manager (already familiar from previous setup)
-
-    # Utilities
-    fastfetch     # System info display (modern neofetch replacement)
-    hyprpicker    # Color picker — copies hex to clipboard
-    wl-color-picker # GUI color picker for Wayland
+    # ---- Display Configuration ---------------------------------
+    # wlr-randr: Wayland CLI display config (like xrandr but for Wayland).
+    # Useful for scripting or quick one-off resolution changes.
+    wlr-randr
   ];
 }
