@@ -179,10 +179,6 @@
     # Enables hardware-accelerated video in Firefox, mpv, VLC, etc.
     LIBVA_DRIVER_NAME = "nvidia";
 
-    # Route Firefox hardware video decode through NVIDIA's direct NVDEC path.
-    # Without this, Firefox ignores LIBVA_DRIVER_NAME on Wayland + NVIDIA.
-    NVD_BACKEND = "direct";
-
     # Tell apps that this is a Wayland session.
     # Used by GTK4, SDL2, and other toolkits to pick the right backend.
     XDG_SESSION_TYPE = "wayland";

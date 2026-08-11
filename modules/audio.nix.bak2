@@ -150,8 +150,6 @@
       "pulse.properties" = {
         "server.default.fragments"     = 4;
         "server.default.fragment-size" = 4096;
-        "pulse.idle.timeout"           = 0;
-        "flat-volumes"                 = false;
       };
       "stream.properties" = {
         # High-quality resampling for all pulse streams.
@@ -198,18 +196,6 @@
             actions = {
               update-props = {
                 # 0 = never suspend. Set to a positive integer (seconds) to re-enable.
-                "session.suspend-timeout-seconds" = 0;
-              };
-            };
-          }
-        ];
-      };
-      "21-stream-suspend-timeout" = {
-        "node.rules" = [
-          {
-            matches = [{ "media.class" = "Audio/Sink"; }];
-            actions = {
-              update-props = {
                 "session.suspend-timeout-seconds" = 0;
               };
             };

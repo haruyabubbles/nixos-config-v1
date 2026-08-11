@@ -146,12 +146,16 @@
     #   and uses significantly less CPU. Set to 15 only if you do critical
     #   listening or mastering work.
     extraConfig.pipewire-pulse."99-haru-pulse" = {
-      "context.properties" = {};
+      "context.properties" = {
+        # Disable flat volumes (per-stream volumes are independent of master)
+        "pulse.default.req" = "256/48000"; # pulse request quantum
+      };
       "pulse.properties" = {
-        "server.default.fragments"     = 4;
-        "server.default.fragment-size" = 4096;
-        "pulse.idle.timeout"           = 0;
-        "flat-volumes"                 = false;
+        # server.default.fragments and fragment-size control the pulse
+        # timing buffer. 2 fragments of 960 bytes each = minimal latency
+        # for pulse apps without sacrificing stability.
+        "server.default.fragments"     = 2;
+        "server.default.fragment-size" = 960;
       };
       "stream.properties" = {
         # High-quality resampling for all pulse streams.
@@ -198,18 +202,6 @@
             actions = {
               update-props = {
                 # 0 = never suspend. Set to a positive integer (seconds) to re-enable.
-                "session.suspend-timeout-seconds" = 0;
-              };
-            };
-          }
-        ];
-      };
-      "21-stream-suspend-timeout" = {
-        "node.rules" = [
-          {
-            matches = [{ "media.class" = "Audio/Sink"; }];
-            actions = {
-              update-props = {
                 "session.suspend-timeout-seconds" = 0;
               };
             };

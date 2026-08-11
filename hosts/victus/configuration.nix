@@ -86,6 +86,17 @@
   # Keep only the last 6 NixOS generations in the boot menu.
   # Older generations are still garbage-collected by nix.gc below.
   boot.loader.systemd-boot.configurationLimit = 6;
+  # Suppress the "[ OK ] Starting..." service spam on the console.
+  # quiet        — hides kernel + udev messages
+  # loglevel=3   — only errors reach the console (no info/debug)
+  # systemd.show_status=auto — systemd still shows failures, hides successes
+  boot.kernelParams = [ "quiet" "loglevel=3" "systemd.show_status=auto" "udev.log_level=3" ];
+  boot.consoleLogLevel = 3;
+  boot.initrd.verbose = false;
+
+
+
+
 
   # ============================================================
   # NETWORKING

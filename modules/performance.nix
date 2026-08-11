@@ -31,6 +31,13 @@
   # ============================================================
   boot.kernel.sysctl = {
 
+    # Magic SysRq — safe emergency reboot when the system is completely frozen.
+    # Instead of hard power-cycling (which risks filesystem corruption), hold
+    # Alt+SysRq and tap: R E I S U B  (one second apart each).
+    # R=reclaim kbd, E=sigterm all, I=sigkill all, S=sync disks, U=remount ro, B=reboot.
+    # Mnemonic: "Reboot Even If System Utterly Broken"
+    "kernel.sysrq" = 1;
+
     # ---- Memory management ----------------------------------------
 
     # How aggressively the kernel moves anonymous pages to swap.

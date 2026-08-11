@@ -34,6 +34,13 @@
 { config, pkgs, ... }:
 
 {
+  # GNOME Keyring stores secrets (passwords, SSH keys, GPG keys)
+  # in an encrypted keyring that unlocks at login.
+  # Many apps (VSCode, Chrome, GNOME apps) use it via the
+  # libsecret API. Enabling it here makes it available regardless
+  # of which desktop session is running — Niri included.
+  services.gnome.gnome-keyring.enable = true;
+
   # hardware.graphics (formerly hardware.opengl) enables the Mesa
   # OpenGL/Vulkan userspace libraries that apps link against.
   # Without this, 3D acceleration doesn't work at all.
