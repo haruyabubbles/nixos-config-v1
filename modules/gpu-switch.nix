@@ -72,7 +72,6 @@
     # nvtop: combined NVIDIA + Intel GPU usage in one TUI view.
     # Shows utilization %, VRAM usage, temperature, power draw per GPU.
     # Usage: nvtop
-    nvtopPackages.full
 
     # OpenGL info and quick render test.
     # mesa-demos provides both `glxinfo` and `glxgears` (glxinfo was merged into it).

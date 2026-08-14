@@ -120,9 +120,10 @@
         # 512 @ 48 kHz = 10.67 ms latency. Good desktop balance.
         # Drop to 256 (5.3 ms) if you play games or use JACK instruments.
         # Raise to 1024 (21.3 ms) if you get crackling under CPU load.
-        "default.clock.quantum"     = 512;
+        "default.clock.quantum"     = 1024;
         "default.clock.min-quantum" = 32;
         "default.clock.max-quantum" = 8192;
+        "link.max-buffers"          = 16;
       };
     };
 

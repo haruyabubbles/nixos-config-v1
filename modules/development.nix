@@ -97,7 +97,6 @@
     # ----------------------------------------------------------
     htop             # Interactive process viewer (classic, widely available)
     btop             # Modern resource monitor with graphs for CPU/RAM/disk/net
-    nvtopPackages.full # GPU process monitor — shows NVIDIA + Intel GPU usage in one view
 
     # ----------------------------------------------------------
     # HARDWARE INSPECTION
