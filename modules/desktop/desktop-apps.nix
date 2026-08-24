@@ -163,11 +163,6 @@
     # Cinnamon equivalent: Image Viewer (eog / gnome-photos).
     loupe
 
-    # gThumb — more powerful image viewer with editing and slide-show.
-    # Batch rename, resize, colour correction, GPS map view, web album export.
-    # Use loupe for quick viewing, gthumb for batch operations.
-    gthumb
-
     # MPV (media player — already in development.nix, listed here for clarity)
     # Used by: ani-cli, lobster. Also the best standalone video player.
 
@@ -184,11 +179,6 @@
     # Fast, minimal, supports forms and annotations.
     # Cinnamon equivalent: Document Viewer (same app).
     evince
-
-    # Okular — KDE document viewer with PDF annotations + signing.
-    # More powerful than Evince for annotating research papers.
-    # KDE packages live under kdePackages.* in nixpkgs 26.05.
-    kdePackages.okular
 
     # GNOME Calculator — scientific + programmer + unit conversion modes.
     # Cinnamon equivalent: Calculator (same underlying GNOME app).
@@ -223,13 +213,7 @@
     # Resources — modern system monitor with per-process GPU tracking.
     # Shows CPU (per-core), RAM, GPU (NVIDIA + Intel), disk I/O, network,
     # and a list of running apps with per-resource breakdown.
-    # This is BETTER than Cinnamon's System Monitor.
     resources
-
-    # GNOME System Monitor (classic alternative to Resources).
-    # Already familiar from GNOME/Cinnamon. Simpler but reliable.
-    # Cinnamon equivalent: System Monitor.
-    gnome-system-monitor
 
     # dconf Editor — view and edit ALL GSettings/dconf keys.
     # Like regedit but for GNOME settings. Useful for tweaking hidden options
@@ -261,11 +245,6 @@
     #   wf-recorder -f output.mp4                      # record full screen
     #   Ctrl+C to stop
     wf-recorder
-
-    # wl-screenrec — GPU-accelerated Wayland screen recorder (alternative).
-    # Uses VAAPI hardware encoding for very low CPU overhead recordings.
-    # Usage: wl-screenrec -g "$(slurp)" -f out.mp4
-    wl-screenrec
 
     # Flameshot — advanced screenshot tool with annotation.
     # More features than grim+swappy: text, arrows, blur, upload to imgur.
@@ -320,11 +299,6 @@
 
     # GNOME Weather — weather forecast app (uses local weather service).
     gnome-weather
-
-    # Mission Center — another modern resource monitor (Electron-based).
-    # Has beautiful graphs and a very clean UI.
-    # Usage: mission-center
-    mission-center
 
     # Impression — simple USB image flasher GUI (like Balena Etcher).
     # Flash Linux ISOs, NixOS images to USB drives with a GUI.

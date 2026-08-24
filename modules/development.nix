@@ -56,7 +56,6 @@
     # ----------------------------------------------------------
     gcc              # GNU C/C++ compiler — required to build most native Linux software
     gnumake          # Make build system — reads Makefiles to compile projects
-    alacritty
 
     # ----------------------------------------------------------
     # CREATIVE / MEDIA PRODUCTION
@@ -79,7 +78,7 @@
     lutris           # Game manager that handles Wine, Proton, emulators, etc.
     mangohud         # In-game overlay showing FPS, CPU/GPU usage, temps
     protonup-qt      # GUI tool to install/update Proton-GE (custom Proton builds)
-    gamescope        # Wayland-based micro-compositor for running games at custom resolution/framerate
+    # gamescope is installed via programs.gamescope.enable = true in configuration.nix.
 
     # ----------------------------------------------------------
     # TERMINAL UTILITIES (modern replacements for classic tools)
@@ -95,19 +94,19 @@
     # ----------------------------------------------------------
     # SYSTEM MONITORING
     # ----------------------------------------------------------
-    htop             # Interactive process viewer (classic, widely available)
     btop             # Modern resource monitor with graphs for CPU/RAM/disk/net
 
     # ----------------------------------------------------------
     # HARDWARE INSPECTION
     # ----------------------------------------------------------
-    pciutils         # `lspci` — list PCI devices (GPU, WiFi, etc.)
-    usbutils         # `lsusb` — list USB devices
+    # pciutils (lspci) and usbutils (lsusb) are declared in
+    # hosts/victus/configuration.nix under SYSTEM PACKAGES.
+    # They are referenced by the gpu-switch.nix wrapper scripts
+    # and need to be available system-wide, not just per-user.
 
     # ----------------------------------------------------------
     # SERIAL / EMBEDDED / NETWORKING
     # ----------------------------------------------------------
-    screen           # Terminal multiplexer also used for serial console access (`screen /dev/ttyUSB0`)
     minicom          # Serial terminal emulator — useful for UART debugging on microcontrollers
     gh               # GitHub CLI — manage PRs, issues, repos from the terminal
     nmap             # Network scanner — discover hosts, open ports, and services
@@ -119,42 +118,42 @@
     wget             # Download files from the web (recursive downloads, mirrors)
     unzip            # Extract .zip archives
     zip              # Create .zip archives
-    p7zip            # 7-Zip — handles .7z, .rar, and many other archive formats
-    tree             # Print directory structure as a tree
+    # p7zip is declared in hosts/victus/configuration.nix under SYSTEM PACKAGES.
     jq               # Command-line JSON processor — slice, filter, and format JSON
-    unzip            # (duplicate — safe to remove one)
 
     # ----------------------------------------------------------
     # PRODUCTIVITY & OFFICE
     # ----------------------------------------------------------
     libreoffice                    # Full office suite (Writer, Calc, Impress, etc.)
-    python3Packages.jupyterlab     # JupyterLab — browser-based notebook for Python/data science
+    #python3Packages.jupyterlab   # JupyterLab — browser-based notebook for Python/data science
     fastfetch                      # System info fetcher (like neofetch, but faster)
     scrcpy                         # Mirror and control Android device screen over USB/WiFi
-    obsidian                       # Markdown-based knowledge base / note-taking app (unfree)
+    obsidian                        # Markdown-based knowledge base / note-taking app (unfree)
 
     # ----------------------------------------------------------
     # WINDOWS COMPATIBILITY (Wine)
     # ----------------------------------------------------------
-    # wineWowPackages.stable runs both 32-bit and 64-bit Windows apps.
-    # "WoW" = Windows on Windows = the 32-bit subsystem inside 64-bit Wine.
-    wineWowPackages.stable
-    winetricks       # Script that installs Windows runtimes/libraries into Wine prefixes
+    # wineWow64Packages.stable runs both 32-bit and 64-bit Windows apps.
+    # "WoW64" = Windows on Windows 64 = the 32-bit compatibility layer inside
+    # a 64-bit Wine installation (Wine-on-Wine, essentially).
+    # NOTE: wineWowPackages was renamed to wineWow64Packages in nixpkgs 26.05.
+    # Using the old name triggers an evaluation warning on every rebuild.
+    #wineWow64Packages.stable
+    #winetricks       # Script that installs Windows runtimes/libraries into Wine prefixes
                      # (Visual C++ redistributables, DirectX, .NET, etc.)
-    bottles          # GUI frontend for managing Wine prefixes — easier than raw Wine commands
-    dxvk             # DirectX 9/10/11 → Vulkan translation layer — makes Windows games run faster in Wine
+    #bottles          # GUI frontend for managing Wine prefixes — easier than raw Wine commands
+    #dxvk            # DirectX → Vulkan layer — uncomment when Wine is enabled above
 
     # ----------------------------------------------------------
     # VULKAN / GRAPHICS DEBUGGING
     # ----------------------------------------------------------
     vulkan-tools     # `vulkaninfo` — verify Vulkan is working; `vkcube` for a spinning test cube
     vulkan-loader    # Runtime Vulkan ICD loader — apps link against this to find the GPU driver
-    mesa-demos       # `glxinfo`, `glxgears` — OpenGL debugging and info tools
+    # mesa-demos is declared in modules/gpu-switch.nix (used by the gpu-info script).
 
     # ----------------------------------------------------------
     # SYSTEM DEBUGGING
     # ----------------------------------------------------------
-    rofi             # Application launcher / window switcher (X11 and XWayland)
     strace           # System call tracer — record every syscall a process makes; invaluable for debugging
 
     # ----------------------------------------------------------
@@ -180,95 +179,48 @@
     # specialArgs = { inherit inputs; }.
     # ${pkgs.system} evaluates to "x86_64-linux" on this machine.
     # ----------------------------------------------------------
-    inputs.lobster.packages.${pkgs.system}.lobster  # CLI anime/movie streaming tool
+    # pkgs.system was deprecated in nixpkgs 25.11; use stdenv.hostPlatform.system.
+    # Both evaluate to "x86_64-linux" on this machine but the new form
+    # avoids the evaluation warning printed on every rebuild.
+    inputs.lobster.packages.${pkgs.stdenv.hostPlatform.system}.lobster  # CLI anime/movie streaming tool
 
     # Claude Code — Anthropic's AI coding assistant CLI (unfree)
     claude-code
 
-    # n8n package (binary). The n8n SERVICE is configured separately
-    # below via services.n8n. Having the package here gives you the
-    # `n8n` CLI command even when the service is stopped.
-    n8n
+    # n8n — workflow automation tool. Uncomment along with services.n8n
+    # and services.postgresql below when you want to use it.
+    #n8n
   ];
 
   # ============================================================
-  # N8N — Workflow Automation
-  # n8n is a self-hosted workflow automation tool (like Zapier/Make).
-  # It runs as a systemd service on port 5678.
-  #
-  # HOW IT LINKS TO POSTGRESQL:
-  #   services.n8n sets DB_TYPE=postgresdb, pointing n8n at the
-  #   local PostgreSQL server (services.postgresql below).
-  #   n8n will NOT start successfully until the database and user
-  #   exist — see the one-time setup note under services.postgresql.
+  # N8N + POSTGRESQL — Workflow Automation (disabled)
+  # Uncomment the block below (and the n8n package above) to re-enable.
+  # One-time manual setup after first enable:
+  #   sudo -u postgres createuser n8n
+  #   sudo -u postgres createdb -O n8n n8n
   # ============================================================
-  services.n8n = {
-    enable = true;
-
-    # Opens port 5678 in the firewall so n8n is reachable from
-    # the local network (or Tailscale). Remove if you only want
-    # localhost access.
-    openFirewall = true;
-
-    environment = {
-      N8N_PORT = "5678";                         # Which port n8n listens on
-
-      # The public URL n8n uses to build webhook URLs.
-      # Change this to your Tailscale IP or domain if you access
-      # n8n from other devices.
-      WEBHOOK_URL = "http://localhost:5678/";
-
-      # Switch n8n's storage from the default SQLite file to PostgreSQL.
-      # PostgreSQL handles concurrent workflows and larger datasets better.
-      DB_TYPE            = "postgresdb";
-      DB_POSTGRESDB_HOST = "localhost";          # Local postgres socket/host
-      DB_POSTGRESDB_DATABASE = "n8n";            # Database name (must exist — see below)
-      DB_POSTGRESDB_USER     = "n8n";            # Postgres user (must exist — see below)
-      # DB_POSTGRESDB_PASSWORD = "";             # No password because auth = trust below
-    };
-  };
-
-  # ============================================================
-  # POSTGRESQL — Relational Database Server
-  # Used as the backend for n8n (above).
-  # The `postgresql_16` package is version 16 (current stable LTS).
-  #
-  # AFTER FIRST REBUILD — one-time manual setup required:
-  #   Nix installs and starts the PostgreSQL server but does NOT
-  #   create roles or databases. Run these commands once:
-  #
-  #     sudo -u postgres createuser n8n
-  #     sudo -u postgres createdb -O n8n n8n
-  #
-  #   After that, n8n can connect and create its own schema.
-  # ============================================================
-  services.postgresql = {
-    enable = true;
-
-    # Pin to PostgreSQL 16 explicitly so the version doesn't change
-    # unexpectedly on a nixpkgs update (data migration between major
-    # versions requires manual steps with `pg_upgrade`).
-    package = pkgs.postgresql_16;
-
-    # Allow TCP connections (not just Unix socket).
-    # Needed by apps that connect via host = "localhost" / 127.0.0.1.
-    enableTCPIP = true;
-
-    # pg_hba.conf controls who can connect and how they authenticate.
-    # mkOverride 10 means this value takes priority over any default
-    # set elsewhere in the NixOS module system (lower number = higher priority).
-    #
-    # "trust" = no password required.
-    # This is fine for a local dev machine where PostgreSQL is not
-    # exposed to the internet. If you open the machine to a network,
-    # switch to "scram-sha-256" and set passwords.
-    authentication = pkgs.lib.mkOverride 10 ''
-      # TYPE  DATABASE  USER  ADDRESS       METHOD
-      local   all       all                 trust    # Unix socket — any local user
-      host    all       all   127.0.0.1/32  trust    # IPv4 localhost
-      host    all       all   ::1/128       trust    # IPv6 localhost
-    '';
-  };
+  # services.n8n = {
+  #   enable = true;
+  #   openFirewall = true;
+  #   environment = {
+  #     N8N_PORT = "5678";
+  #     WEBHOOK_URL = "http://localhost:5678/";
+  #     DB_TYPE            = "postgresdb";
+  #     DB_POSTGRESDB_HOST = "localhost";
+  #     DB_POSTGRESDB_DATABASE = "n8n";
+  #     DB_POSTGRESDB_USER     = "n8n";
+  #   };
+  # };
+  # services.postgresql = {
+  #   enable = true;
+  #   package = pkgs.postgresql_16;
+  #   enableTCPIP = true;
+  #   authentication = pkgs.lib.mkOverride 10 ''
+  #     local   all       all                 trust
+  #     host    all       all   127.0.0.1/32  trust
+  #     host    all       all   ::1/128       trust
+  #   '';
+  # };
 
   # ============================================================
   # TOR — Anonymous Network Client

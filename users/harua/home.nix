@@ -33,13 +33,6 @@
     lolcat
     home-manager
 
-    # Audio control GUI — installed per-user so it runs in user session context.
-    # System-wide effects engine: EQ, compressor, limiter, bass boost, gain.
-    # "Gain" plugin set to +6 dB = roughly 2x louder without clipping.
-    # "Loudness Equalizer" preset makes quiet content match loud content level.
-    # Start: easyeffects  → enable the "Sink" chain → add Gain / Loudness plugins.
-    easyeffects
-
     # Wayland clipboard history picker (fuzzel is already in nnn.nix as the launcher)
     # cliphist and wl-clipboard are in nnn.nix; no need to duplicate.
 
@@ -311,7 +304,7 @@
       # then rebuilds (same as `rebuild` without the update step).
       rebuild = "sudo nixos-rebuild switch --flake /etc/nixos#victus";
       update  = "sudo nix flake update /etc/nixos && sudo nixos-rebuild switch --flake /etc/nixos#victus";
-      hm      = "home-manager switch --flake /etc/nixos#harua";
+      hm      = "rebuild";
       gc      = "sudo nix-collect-garbage -d && nix-collect-garbage -d";
       # Show which packages changed in the last rebuild
       nixdiff = "nvd diff $(ls -d1v /nix/var/nix/profiles/system-* | tail -2)";

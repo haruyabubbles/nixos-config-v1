@@ -223,7 +223,6 @@
     # ---- Terminals ----------------------------------------------
     foot    # Lightweight Wayland-native terminal — fast, minimal, good fallback
     kitty   # GPU-accelerated terminal — configured in home.nix with Catppuccin
-    alacritty # Another GPU-accelerated terminal (cross-platform, Rust-based)
 
     # ---- Clipboard ----------------------------------------------
     wl-clipboard  # wl-copy / wl-paste — Wayland clipboard CLI tools
@@ -245,7 +244,6 @@
 
     # ---- App Launcher ------------------------------------------
     fuzzel  # Fast Wayland-native dmenu launcher (used for clipboard picker too)
-    rofi    # Featureful launcher (X11 + XWayland mode; also has Wayland branch)
 
     # ---- Media / Brightness Keys --------------------------------
     playerctl     # MPRIS media player control (play/pause/next/prev/seek)
@@ -255,7 +253,8 @@
     nemo  # Cinnamon's file manager — familiar and full-featured
 
     # ---- System Info -------------------------------------------
-    fastfetch  # Modern neofetch replacement — fast system info display
+    # fastfetch is declared in modules/development.nix (system-wide).
+    # Run: fastfetch   or alias: ff
 
     # ---- Color Tools -------------------------------------------
     hyprpicker     # Screen color picker (Wayland-native, copies hex to clipboard)
@@ -268,24 +267,17 @@
     polkit_gnome
 
     # ---- Logout / Power ----------------------------------------
-    # wlogout: Wayland logout screen with shutdown/reboot/lock/suspend buttons.
+    # wlogout is declared in modules/desktop/desktop-apps.nix (section 10).
     # Bind to Mod+Shift+E in ~/.config/niri/config.kdl:
     #   Mod+Shift+E { spawn "wlogout"; }
-    wlogout
 
     # ---- Idle Management ----------------------------------------
-    # swayidle: runs commands after N seconds of user inactivity.
-    # Works on all Wayland compositors (not just sway).
-    # Example usage (add to niri spawn-at-startup or a systemd user service):
+    # swayidle is declared in modules/desktop/desktop-apps.nix (section 10).
+    # Example usage (spawn-at-startup or systemd user service):
     #   swayidle -w \
     #     timeout 300 'noctalia lock' \         # lock screen after 5 min
     #     timeout 600 'systemctl suspend' \      # suspend after 10 min
     #     before-sleep 'noctalia lock'           # lock before suspend
-    swayidle
 
-    # ---- Display Configuration ---------------------------------
-    # wlr-randr: Wayland CLI display config (like xrandr but for Wayland).
-    # Useful for scripting or quick one-off resolution changes.
-    wlr-randr
   ];
 }

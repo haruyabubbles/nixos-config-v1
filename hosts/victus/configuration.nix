@@ -69,9 +69,87 @@
       #../../modules/game.nix
     ];
 
-  # Overlays let you patch or replace packages from nixpkgs.
-  # Uncomment if you have custom overlays in the overlays/ directory.
-  #nixpkgs.overlays = [ (import ../../overlays) ];
+  # ============================================================
+  # PACKAGE OVERLAYS
+  # ============================================================
+  # An overlay is a function (final: prev: { ... }) evaluated by Nix
+  # in a fixed-point:
+  #   final — the fully-merged package set (all overlays applied)
+  #   prev  — the package set BEFORE this overlay
+  # Use prev to access the original package, final to reference
+  # other already-overridden packages from this or earlier overlays.
+  #
+  # BUG FIX — perl5.42.0-IO-Tty-1.20 (nixpkgs 26.05 issue):
+  #
+  #   Root cause:
+  #     IO-Tty ships its OWN configure script (not ExtUtils::MakeMaker)
+  #     that probes for the C compiler by calling `gcc` as a bare
+  #     command via PATH.  Inside the Nix sandbox, PATH only contains
+  #     what is explicitly declared as a nativeBuildInput — gcc is
+  #     NOT listed in the current nixpkgs recipe for IO-Tty.
+  #     The configure step therefore fails with:
+  #       "ERROR: cannot run the configured compiler 'gcc'"
+  #
+  #   Cascade failure chain:
+  #     IO-Tty build fails
+  #       → perl-5.42.0-env fails (1 dep failed)
+  #         → moreutils-0.70 fails (used as a setup hook)
+  #           → NVIDIA EGL external-platforms 32-bit fails
+  #             → graphics-drivers-32bit fails
+  #               → Steam, graphics-driver.conf, tmpfiles.d fail
+  #                 → entire system derivation fails
+  #
+  #   Fix:
+  #     Override IO-Tty to add stdenv.cc to nativeBuildInputs.
+  #     stdenv.cc is the compiler wrapper package that puts gcc, cc,
+  #     and friends on PATH inside the Nix build sandbox.
+  #
+  #   When to remove this overlay:
+  #     Once a nixpkgs commit on nixos-26.05 fixes the IO-Tty recipe
+  #     to include stdenv.cc natively, this override becomes a no-op
+  #     and can be removed (or the list narrowed).
+  #
+  # To also load the overlays/ directory (e.g. the Sober Roblox client),
+  # extend the list:
+  #   nixpkgs.overlays = [ (import ../../overlays) ioTtyFix ];
+  # where ioTtyFix is the lambda below extracted into a let binding.
+  nixpkgs.overlays = [
+    (final: prev: {
+      # Fix the IO-Tty-1.20 build failure (nixpkgs 26.05) by overriding moreutils.
+      #
+      # Root cause chain (i686):
+      #   nvidia-egl-external-platforms-x32 → egl-gbm → eglexternalplatform
+      #   → setup-hook.sh → moreutils → perl.withPackages [IPCRun] → IOTty
+      #   IOTty-1.20 configure calls 'gcc' bare; gcc is not in the Nix sandbox
+      #   PATH for Perl packages (no stdenv.cc in nativeBuildInputs).
+      #
+      # Why not fix IOTty directly:
+      #   In nixpkgs 26.05, perlPackages is built with makeScopeWithSplicing'.
+      #   Any overlay that reads perlPackages.X (even through `prev`) causes
+      #   infinite recursion: the spliced scope references final.perlPackages.X
+      #   which references the overlay's definition which references perlPackages.X.
+      #   All overlay approaches (overrideScope, extend, perl5.override) silently
+      #   fall through or error — the drv hash never changes.
+      #
+      # The fix — target moreutils instead:
+      #   moreutils is a plain callPackage package (no scope, no splicing).
+      #   Its buildInputs = [perl.withPackages [IPCRun, TimeDate, TimeDuration]];
+      #   IPCRun has propagatedBuildInputs = [IOTty], so stripping buildInputs
+      #   removes IOTty from the closure. moreutils still builds correctly —
+      #   nativeBuildInputs already provides perl for pod2man. The i686 moreutils
+      #   is used only as a setup-hook; vidir/vipe/ts are not called in that role.
+      #
+      # Fix IO-Tty-1.20 (nixpkgs 26.05): strip moreutils buildInputs.
+      #   moreutils buildInputs = [perl.withPackages [IPCRun ...]]
+      #   IPCRun propagates IOTty, whose configure calls bare 'gcc' (not in
+      #   the Nix sandbox PATH for Perl packages). Stripping buildInputs
+      #   removes IOTty from the closure; moreutils still builds correctly
+      #   — its nativeBuildInputs already provide perl for pod2man + docbook.
+      moreutils = prev.moreutils.overrideAttrs (_: {
+        buildInputs = [];
+      });
+    })
+  ];
 
   # ============================================================
   # BOOTLOADER
@@ -155,6 +233,13 @@
 
     # Trust the local user so they can use binary caches without sudo.
     trusted-users = [ "root" "harua" ];
+
+    # Force HTTP/1.1 for all Nix downloads.
+    # curl's HTTP/2 implementation hits a framing-layer bug on some Linux
+    # setups ("Stream error in the HTTP/2 framing layer") causing downloads
+    # to stall and retry. HTTP/1.1 is slower in theory but never hits this
+    # bug and is fully reliable with cache.nixos.org and Cachix.
+    http2 = false;
   };
 
   # Automatically delete old store paths weekly.
