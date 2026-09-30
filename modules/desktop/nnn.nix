@@ -85,6 +85,18 @@
   # /share/wayland-sessions. tuigreet is its terminal-based greeter UI.
   services.greetd = {
     enable = true;
+
+    # Without this, tuigreet (a TUI, not a graphical greeter) races the
+    # last few boot units for the console: it can draw its login box
+    # before systemd is done printing "[ OK ] Started ..." lines, so
+    # those lines scroll over the username/password fields while you
+    # type. useTextGreeter tells the NixOS greetd module to set
+    # Type=idle (wait until no other systemd jobs are running before
+    # actually launching tuigreet) plus proper TTY handling
+    # (TTYReset/TTYVHangup/TTYVTDisallocate) — the console fully
+    # settles first, THEN tuigreet takes over cleanly.
+    useTextGreeter = true;
+
     settings = {
       default_session = {
         # tuigreet was moved out of the greetd package set in nixpkgs 26.05.
@@ -109,6 +121,18 @@
 
   services.upower.enable = true;
   security.polkit.enable = true;
+
+  # udisks2 — mounts/unmounts removable drives (USB sticks, SD cards) on
+  # request from a file manager or `udisksctl`. Without this, nemo's
+  # "Devices" sidebar stays empty and USB drives never get a mountpoint
+  # even though the kernel detects them (visible in lsblk/dmesg).
+  # GNOME/KDE pull this in automatically; niri does not.
+  services.udisks2.enable = true;
+
+  # gvfs — provides nemo's trash, network locations (smb/sftp), and the
+  # GVfs udisks2-volume-monitor that auto-mounts removable media when
+  # plugged in (not just on manual click).
+  services.gvfs.enable = true;
 
   # GNOME Keyring — stores passwords/SSH keys/GPG keys encrypted at rest.
   # Enabled here (not just nvidia.nix) for clarity. No-op if already set.

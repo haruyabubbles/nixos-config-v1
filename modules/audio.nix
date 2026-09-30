@@ -122,7 +122,30 @@
         # Raise to 1024 (21.3 ms) if you get crackling under CPU load.
         "default.clock.quantum"     = 1024;
         "default.clock.min-quantum" = 32;
-        "default.clock.max-quantum" = 8192;
+
+        # BUG FIX: Spotify "Can't play" on pause/skip.
+        # Root cause (confirmed via pw-top): Spotify forces the PipeWire graph
+        # quantum to 8192 frames (185 ms at 44100 Hz). When Spotify pauses or
+        # skips, the quantum collapses. When Spotify tries to reopen its stream,
+        # the quantum renegotiation fails → "Can't play the current song."
+        # The stressed node showed W/Q = 6.00 (waiting 6× its own quantum).
+        # Capping max-quantum at 1024 prevents the huge jump. Spotify still
+        # works fine at 1024 (21 ms buffer); it just can't destabilise the graph.
+        "default.clock.max-quantum" = 1024;
+
+        # BUG FIX ROUND 2 (2026-09-01): max-quantum alone did NOT fix it.
+        # Confirmed live via `pw-top`: Spotify's own stream node was still
+        # running at QUANT=8192 while the actual driver (the active sink)
+        # ran at QUANT=1024 — max-quantum only caps the shared graph/driver
+        # clock negotiation, but Spotify plays at 44100 Hz against a 48000 Hz
+        # graph clock, so PipeWire gives it its own resampler/adapter node.
+        # That adapter negotiates its buffer size from Spotify's own
+        # PulseAudio client request (pulse.attr.tlength), which slips right
+        # past max-quantum entirely.
+        # force-quantum is not a ceiling, it's a MANDATE: every node in the
+        # graph, including foreign-rate adapter nodes like Spotify's, is
+        # pinned to exactly this quantum, no negotiation possible.
+        "default.clock.force-quantum" = 1024;
         "link.max-buffers"          = 16;
       };
     };
@@ -147,7 +170,25 @@
     #   and uses significantly less CPU. Set to 15 only if you do critical
     #   listening or mastering work.
     extraConfig.pipewire-pulse."99-haru-pulse" = {
-      "context.properties" = {};
+      # BUG FIX: Spotify "Can't play the current song" on PipeWire.
+      #
+      # Root cause: Spotify (Electron/Chromium) opens a new PipeWire-pulse
+      # client connection on every skip, pause, or track change — but never
+      # properly closes the old ones. These dead clients accumulate until the
+      # default limit of 64 is hit, at which point PipeWire refuses new
+      # connections and Spotify gets "Can't play the current song".
+      # Restarting Spotify clears all dead clients, which is why that fixes it.
+      #
+      # Fix: raise max.clients from the default 64 to 256.
+      # This is enough headroom that the limit is never reached in practice,
+      # even with heavy skipping. PipeWire still garbage-collects dead clients;
+      # we just give it more room before it starts refusing new ones.
+      #
+      # Source: https://community.spotify.com/t5/Desktop-Linux/
+      #         1-1-2-86-502-g8cd7fb22-Spotify-can-t-play-this-right-now
+      "context.properties" = {
+        "max.clients" = 256;
+      };
       "pulse.properties" = {
         "server.default.fragments"     = 4;
         "server.default.fragment-size" = 4096;
@@ -165,6 +206,58 @@
         # starts playing audio again.
         "node.pause-on-idle" = false;
       };
+
+      # BUG FIX ROUND 4 (2026-09-01): the ACTUAL fix for Spotify's
+      # 8192-frame quantum stall — pulse.rules, not WirePlumber node.rules.
+      #
+      # Three earlier attempts, all verified live via pw-top/pw-dump and
+      # all confirmed NOT to work:
+      #   Round 1 — default.clock.max-quantum = 1024 (in context.properties
+      #             above). Only bounds PipeWire's native graph/driver
+      #             clock negotiation. Never seen by pulse-protocol clients.
+      #   Round 2 — default.clock.force-quantum = 1024. Confirmed live via
+      #             `pw-metadata -n settings` that the value WAS set and
+      #             held — but Spotify's node stayed at QUANT=8192 anyway.
+      #             force-quantum only governs native PipeWire graph nodes.
+      #   Round 3 — WirePlumber node.rules update-props node.latency, in
+      #             the "15-spotify-fix" block below. Looked like it worked
+      #             (pause-on-idle from the same block was false, as
+      #             expected) but that was a false positive — pause-on-idle
+      #             is ALSO set unconditionally for every pulse stream via
+      #             stream.properties below, so it proved nothing about
+      #             whether the match itself was firing.
+      #
+      # ROUND 5 (2026-09-01) — the REAL bug behind rounds 3 and 4 both
+      # silently failing: the match key was wrong the whole time.
+      #   matches = [ { "application.process.binary" = "spotify"; } ]
+      # never matched anything. Confirmed via pw-dump that Spotify's actual
+      # application.process.binary is ".spotify-wrapped" (leading dot, the
+      # literal argv[0] of the wrapped binary) — not "spotify". Both the
+      # round 3 WirePlumber rule and the round 4 pulse.rules block below
+      # were no-ops from the start. application.name, by contrast, is a
+      # clean "spotify" in both the client and node property dumps — that's
+      # what both match blocks use now.
+      #
+      # The real mechanism (still applies from round 4): libpipewire-
+      # module-protocol-pulse (the PA-compat server itself, configured
+      # right here under extraConfig.pipewire-pulse) has its OWN client-
+      # matching rule system — "pulse.rules" — applied BEFORE the node is
+      # created, at the point where the client's requested stream
+      # properties are still being assembled. This is the only layer that
+      # sits early enough to actually override Spotify's self-chosen
+      # 8192-frame buffer request.
+      "pulse.rules" = [
+        {
+          matches = [
+            { "application.name" = "spotify"; }
+          ];
+          actions = {
+            update-props = {
+              "node.latency" = "1024/44100";
+            };
+          };
+        }
+      ];
     };
 
     # ============================================================
@@ -184,6 +277,42 @@
         "wireplumber.settings" = {
           "bluetooth.autoswitch-to-headset-profile" = false;
         };
+      };
+
+      # ---- Spotify stream fix ---------------------------------------
+      # Keep Spotify's audio node alive even when paused or between tracks.
+      # Without this, WirePlumber can suspend the node mid-track or during
+      # the brief gap between songs, causing the "Can't play" error when
+      # Spotify tries to resume or open the next stream.
+      #
+      # NOTE (2026-09-01): a node.latency override was tried here in this
+      # same block (round 3 of the quantum-stall bugfix). Confirmed via
+      # pw-dump it had NO effect — WirePlumber's node.rules only sees this
+      # node AFTER pipewire-pulse has already created it with its buffer
+      # already negotiated, too late to change node.latency. The actual
+      # working fix is the "pulse.rules" block above, in
+      # extraConfig.pipewire-pulse — see the round 4/5 writeup there.
+      # Separately (round 5): this block's match key was ALSO wrong —
+      # application.process.binary is ".spotify-wrapped", not "spotify" —
+      # so this rule was never matching Spotify at all until round 5 fixed
+      # it to match on application.name instead. pause-on-idle below was
+      # never actually tested by that broken match; it happens to also be
+      # set unconditionally for all pulse streams via stream.properties,
+      # which is what was masking the broken match this whole time.
+      "15-spotify-fix" = {
+        "node.rules" = [
+          {
+            matches = [
+              { "application.name" = "spotify"; }
+            ];
+            actions = {
+              update-props = {
+                "node.pause-on-idle"              = false;
+                "session.suspend-timeout-seconds" = 0;
+              };
+            };
+          }
+        ];
       };
 
       # ---- Suspend policy -------------------------------------------

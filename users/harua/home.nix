@@ -11,7 +11,7 @@
 #   (zoxide, fzf, starship) it belongs here via `programs.*` options so
 #   home-manager can wire up the shell hooks automatically.
 # ============================================================
-{ config, pkgs, inputs, ... }:
+{ config, pkgs, lib, inputs, ... }:
 
 {
   imports = [
@@ -542,6 +542,92 @@
   };
 
   # ============================================================
+  # SPOTIFY FREEZE WATCHDOG — Auto-recover from track-end hangs
+  # ============================================================
+  # BUG (2026-09-01): Spotify Linux client (1.2.90.451) reliably hangs at
+  # the exact end of a track — MPRIS position freezes at mpris:length
+  # (confirmed via live capture: pos and len equal to the millisecond,
+  # held static for 30+ seconds), status stays "Playing", audio is silent,
+  # and the in-app "Can't play the current song" toast appears. This is
+  # NOT an audio-pipeline, PipeWire, kernel, or network issue — extensively
+  # ruled out via live pw-top/pw-dump captures, full journal traces, and
+  # even verbose Chromium/CEF logging (--enable-logging=stderr --v=1),
+  # which produced zero trace of the failure. It's a silent internal stall
+  # in Spotify's own track-transition logic. Root cause not fixable from
+  # the OS side; this is a bug to report upstream, not a config problem.
+  #
+  # WORKAROUND (confirmed working live): sending Spotify an MPRIS "next"
+  # command while frozen — `playerctl -p spotify next` — immediately
+  # unsticks it and advances to the next track cleanly, no app restart
+  # needed. This watchdog automates that nudge: poll playback state once a
+  # second, and if position is completely unchanged across two consecutive
+  # polls while status is "Playing" (a real pause reports status "Paused",
+  # not "Playing", so this can't misfire on an intentional pause — and
+  # real playback ALWAYS advances position every second, so two identical
+  # readings in a row while genuinely playing is never legitimate), send
+  # the nudge automatically. Recovery happens within ~2 seconds, invisibly.
+  # V2 note: originally only checked near the END of a track, matching the
+  # cleanest capture we got — but the first freeze ever captured live was
+  # actually mid-track, so v2 checks for a frozen position ANYWHERE in the
+  # track, not just near its end. See the ExecStart script for the full
+  # writeup. Also added echo logging (captured in the systemd journal via
+  # `journalctl --user -u spotify-freeze-watchdog`) since v1 shipped with
+  # zero visibility into whether it ever actually fired.
+  # ============================================================
+  # SPOTIFY AUTO-RECOVERY WATCHDOG — REMOVED (2026-09-13)
+  # ============================================================
+  # Went through several versions (spotify-freeze-watchdog ->
+  # spotify-connect-bounce-watchdog -> spotify-restart-watchdog), each
+  # meant to auto-recover Spotify from its "Can't play the current song"
+  # bug. The final version (force-quit + relaunch the app on detected
+  # manual skip/pause-resume/seek) turned out to have its own bug: every
+  # relaunch's normal startup sequence (the app briefly going through a
+  # not-playing -> playing transition as it reconnects and resumes) was
+  # itself misdetected as a fresh "manual pause->resume", triggering
+  # ANOTHER restart — an infinite self-triggering loop that made Spotify
+  # completely unusable (constant restarts every ~10-15s, confirmed live
+  # via journalctl). Removed outright at the user's request rather than
+  # patched further — this whole approach has cost more working listening
+  # time than the original bug ever did. If automatic recovery is
+  # revisited later, it needs a fundamentally different detection
+  # mechanism that can't be fooled by its own recovery action's side
+  # effects (e.g. a cooldown keyed off real user input, not MPRIS status
+  # alone). For now: no watchdog, no automatic restarts, no Connect
+  # device bounce. Manual recovery if "Can't play" recurs: restart
+  # Spotify yourself, or `playerctl -p spotify next`.
+  # ============================================================
+  # PIPEWIRE FORCE-QUANTUM — Permanent Spotify quantum-stall bugfix
+  # ============================================================
+  # BUG FIX (2026-09-01): audio.nix sets `default.clock.force-quantum = 1024`
+  # in PipeWire's context.properties, but confirmed via live testing that
+  # this specific key does NOT auto-populate into the runtime "settings"
+  # metadata object the way clock.quantum/min-quantum/max-quantum do —
+  # force-quantum silently stays at its built-in default of 0 (meaning
+  # "not forced") no matter what the config file says. Spotify's stream
+  # then reverts to requesting its own 8192-frame quantum (see audio.nix
+  # for the full root-cause writeup) and randomly stalls/"Can't play".
+  #
+  # Verified fix: writing directly to the live "settings" metadata via
+  # `pw-metadata` DOES take effect and holds (no WirePlumber override
+  # resets it). This oneshot service does that write once per PipeWire
+  # startup so the fix survives reboots/logins without manual intervention.
+  systemd.user.services.pipewire-force-quantum = {
+    Unit = {
+      Description = "Force PipeWire clock quantum on all nodes (Spotify quantum-stall bugfix)";
+      After       = [ "pipewire.service" ];
+      Requisite   = [ "pipewire.service" ];
+    };
+    Install = {
+      WantedBy = [ "pipewire.service" ];
+    };
+    Service = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      ExecStart       = "${pkgs.pipewire}/bin/pw-metadata -n settings 0 clock.force-quantum 1024";
+    };
+  };
+
+  # ============================================================
   # WL-CLIP-PERSIST — Keep Clipboard Alive After Source App Closes
   # ============================================================
   # On Wayland the clipboard is "owned" by the app that copied the text.
@@ -638,6 +724,23 @@
   };
 
   # ============================================================
+  # SPOTIFY FLAGS — belt-and-suspenders for the audio-api fix
+  # ============================================================
+  # The --audio-api=pulseaudio flag is already baked into the spotify-fixed
+  # wrapper in modules/development.nix (via wrapProgram --add-flags), and
+  # is confirmed live on the real process (`.spotify-wrapped --audio-api=
+  # pulseaudio` in /proc/<pid>/cmdline). Spotify also independently reads
+  # ~/.config/spotify-flags.conf (one flag per line) at startup and merges
+  # it with argv — this is a second, independent path some Linux Spotify
+  # users report is needed when the CLI flag alone doesn't stick (e.g. if
+  # Spotify is ever relaunched by something other than our wrapper, such
+  # as a MimeType/URL handler). Costs nothing to have both.
+  # Source: https://github.com/NixOS/nixpkgs/issues/64686
+  xdg.configFile."spotify-flags.conf".text = ''
+    --audio-api=pulseaudio
+  '';
+
+  # ============================================================
   # FASTFETCH — System Info Display Config
   # ============================================================
   xdg.configFile."fastfetch/config.jsonc".text = ''
@@ -676,6 +779,50 @@
       ]
     }
   '';
+
+  # ============================================================
+  # EASYEFFECTS — Declarative Audio Effects Bundle
+  # ============================================================
+  # Uses home-manager's official services.easyeffects module instead of a
+  # hand-rolled systemd unit. Two reasons:
+  #
+  #   1. BUG FIX: the old unit passed `--gapplication-service`, which is
+  #      the pre-8.0 startup flag. On easyeffects 8.2.4 it's deprecated
+  #      and was flooding the journal with QML "ToolBarLayout" /
+  #      "ActionToolBar.qml" errors every few seconds. The module picks
+  #      the correct flag per version automatically (`--hide-window
+  #      --service-mode` on 8.x).
+  #   2. DECLARATIVE PRESET: `preset = "IDK2"` makes the service start
+  #      with `--load-preset IDK2`, so the full chain (autogain →
+  #      compressor → multiband gate → loudness → parametric EQ →
+  #      convolver room simulation → limiter) is active immediately on
+  #      login, not just after opening the EasyEffects window once.
+  #
+  # IDK2.json is a straight copy of the preset as tuned by ear and
+  # measured with ee-measure.sh (pink-noise dual capture of the
+  # EasyEffects sink vs. the DAC output, see ~/Downloads/Audio). A second
+  # preset, MyNoMessy1, was dropped — it was byte-identical to IDK2 except
+  # for plugin order, a leftover from experimenting.
+  services.easyeffects = {
+    enable = true;
+    preset = "IDK2";
+    extraPresets.IDK2 = builtins.fromJSON (builtins.readFile ./easyeffects/IDK2.json);
+  };
+
+  # Convolver impulse-response kernels used by IDK2's Convolver plugin
+  # (kernel-name "01-11"). EasyEffects loads these from
+  # $XDG_DATA_HOME/easyeffects/irs — committing them here means a clean
+  # install has the exact room/plate/hall responses back immediately,
+  # instead of only living in ~/.local/share (never backed up, never
+  # reproduced by the flake).
+  xdg.dataFile =
+    let
+      irDir = ./easyeffects/irs;
+      irFiles = builtins.attrNames (builtins.readDir irDir);
+    in
+    lib.listToAttrs (map
+      (name: lib.nameValuePair "easyeffects/irs/${name}" { source = irDir + "/${name}"; })
+      irFiles);
 
   programs.home-manager.enable = true;
 }

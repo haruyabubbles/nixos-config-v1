@@ -252,6 +252,19 @@
     # Usage: flameshot gui
     flameshot
 
+    # gnome-network-displays — Miracast/WFD + UPnP-DIAL screen casting.
+    # Casts THIS screen out to a Miracast receiver (e.g. the
+    # "MSDisplayAdapter_EF" dongle), the opposite direction from
+    # miraclecast (which only receives). Uses libportal + the standard
+    # xdg-desktop-portal ScreenCast API for capture (same portal path
+    # OBS's "Screen Capture (PipeWire)" source already uses under niri),
+    # and NetworkManager's WiFi P2P device for the WiFi-Direct link —
+    # confirmed supported here (`iw list` reports P2P-GO/P2P-client on
+    # the rtw89 driver, and NetworkManager is on its default
+    # wpa_supplicant backend, which P2P requires).
+    # Usage: gnome-network-displays  (GUI: pick the dongle, hit Connect)
+    gnome-network-displays
+
     # xdg-utils — provides xdg-open, xdg-mime, xdg-settings.
     # xdg-open <file> opens a file with its default application.
     # Already likely pulled in transitively, but explicitly listed here.

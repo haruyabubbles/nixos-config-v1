@@ -16,6 +16,7 @@
   fileSystems."/" =
     { device = "/dev/disk/by-uuid/e9830209-1f0f-4e70-bde0-6da8d27a2ccf";
       fsType = "ext4";
+      options = ["nofail" "x-systemd.device-timeout=30"];
     };
 
   fileSystems."/boot" =

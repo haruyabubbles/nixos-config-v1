@@ -18,6 +18,81 @@
 # ============================================================
 { config, pkgs, inputs, ... }:
 
+let
+  # ------------------------------------------------------------
+  # Spotify — forced onto the PulseAudio backend (via PipeWire's
+  # pulse emulation) instead of its native PipeWire audio API.
+  #
+  # WHY: recent Spotify Linux client builds (1.2.8x/1.2.9x) ship a
+  # native PipeWire audio backend that's buggy: the first track
+  # plays fine, but the next track (via Next, or auto-advance, or
+  # even Pause/Play) silently fails ("Sorry, can't play this
+  # right now") while the UI progress bar keeps animating on its
+  # own until it reaches the track's full duration, and Spotify
+  # Connect still reports this device as "Playing" to other
+  # clients (e.g. your phone) because the app never told the
+  # server playback died. A full restart "fixes" it for exactly
+  # one song, then it recurs. This is a widely reported upstream
+  # bug, not a PipeWire/WirePlumber tuning issue on this machine.
+  #
+  # FIX: pass --audio-api=pulseaudio to fall back to the old,
+  # stable pulse/libpulse path (PipeWire still handles the audio
+  # underneath via the pulse emulation socket — see audio.nix).
+  # wrapProgram layers on top of nixpkgs' spotify FHS wrapper, so
+  # both the CLI and the app-launcher .desktop entry (which just
+  # execs `spotify %U`) pick it up.
+  #
+  # UPDATE (2026-09-06): --audio-api=pulseaudio alone did NOT fix the
+  # "Can't play the current song" freeze on this machine (confirmed live
+  # via /proc/<pid>/cmdline that the flag really was reaching the real
+  # .spotify-wrapped process — it just wasn't enough). Root-caused via
+  # nixpkgs' own snapcraft revision history: the bug is a genuine upstream
+  # regression Spotify introduced starting at client version 1.2.86.502
+  # (snap revision 94) — "the app's native audio backend stops setting
+  # the correct output sample rate," per multiple user reports. nixpkgs
+  # was tracking 1.2.90.451 (revision 96), squarely inside the broken
+  # range.
+  #
+  # FIX (layered on top of the pulseaudio flag above): pin Spotify back
+  # to snap revision 93 = version 1.2.84.475.ga1a748ff, the newest build
+  # still before the regression. Confirmed by downloading and inspecting
+  # meta/snap.yaml directly from snapcraft for revisions 90/93/94/95:
+  #   rev 93 → 1.2.84.475.ga1a748ff  (last known-good)
+  #   rev 94 → 1.2.86.502.g8cd7fb22  (regression introduced — this is the
+  #                                   exact version already named in the
+  #                                   pulse.rules bug-fix comments over in
+  #                                   audio.nix)
+  #   rev 95 → 1.2.89.539.gfb3c63a3  (still broken)
+  # nixpkgs unstable currently tracks 1.2.95.453 — newer, but still past
+  # the regression, so bumping the flake would NOT have fixed this.
+  #
+  # TRADE-OFF: this is an old, unsupported build. Spotify has been known
+  # to server-side block sufficiently old desktop clients from logging in
+  # at some point in the future — if that ever happens here, this pin
+  # will need to move forward again (past whichever version Spotify
+  # eventually fixes the regression in, if they do).
+  spotifyPinned = pkgs.spotify.overrideAttrs (old: rec {
+    version = "1.2.84.475.ga1a748ff";
+    rev = "93";
+    src = pkgs.fetchurl {
+      name = "spotify-${version}-${rev}.snap";
+      url = "https://api.snapcraft.io/api/v1/snaps/download/pOBIoZ2LrCB3rDohMxoYGnbN14EHOgD7_${rev}.snap";
+      hash = "sha256-KY2tjbIIlGiHj1maAM7/lk1+3joniYqqJ2NiOYb4bEs=";
+    };
+  });
+
+  spotify-fixed = pkgs.symlinkJoin {
+    name = "spotify-fixed-${spotifyPinned.version}";
+    paths = [ spotifyPinned ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    postBuild = ''
+      wrapProgram $out/bin/spotify \
+        --add-flags "--audio-api=pulseaudio"
+    '';
+    meta = spotifyPinned.meta // { mainProgram = "spotify"; };
+  };
+in
+
 {
   # NixOS normally blocks "unfree" packages (proprietary licenses).
   # Enabling this allows: Discord, Spotify, VSCode, NVIDIA drivers,
@@ -32,7 +107,8 @@
     # ----------------------------------------------------------
     # COMMUNICATION & SOCIAL
     # ----------------------------------------------------------
-    spotify          # Music streaming client (unfree)
+    spotify-fixed    # Music streaming client, wrapped to use --audio-api=pulseaudio
+                     # (unfree; fixes "plays one song then dies" bug — see `let` above)
     telegram-desktop # Telegram messenger desktop client
     vesktop          # Voice/text chat for gaming and communities (unfree)
 
@@ -50,6 +126,17 @@
     python3          # Python 3 interpreter — used by many tools and scripts
     nodejs           # JavaScript/TypeScript runtime — needed for web dev and some CLI tools
     openjdk          # Open-source Java Development Kit — Java/Kotlin/Scala
+
+    # pm2 — process manager for Node apps. Keeps your app running in the
+    # background, auto-restarts on crash, and manages logs, instead of
+    # running it in a foreground `npm start`/`npm run dev` terminal tab.
+    # Common usage:
+    #   pm2 start app.js --name myapp   # or: pm2 start npm -- start
+    #   pm2 list                        # show running processes
+    #   pm2 logs myapp                  # tail logs
+    #   pm2 restart myapp / pm2 stop myapp / pm2 delete myapp
+    #   pm2 save && pm2 startup         # persist process list across reboots
+    pm2
 
     # ----------------------------------------------------------
     # BUILD TOOLS
@@ -190,6 +277,18 @@
     # n8n — workflow automation tool. Uncomment along with services.n8n
     # and services.postgresql below when you want to use it.
     #n8n
+
+    # ----------------------------------------------------------
+    # NETWORK DIAGNOSTICS
+    # ----------------------------------------------------------
+    speedtest-cli    # `speedtest-cli` — internet speed test (Cloudflare/speedtest.net backends)
+    iw               # `iw dev wlan0 scan` / `iw dev wlan0 link` — WiFi scan & signal in dBm
+    wirelesstools    # `iwconfig` — legacy WiFi status/signal tool, still handy for `watch`
+    nmap             # `nmap -sn 192.168.1.0/24` — LAN device discovery
+    mtr              # `mtr example.com` — live traceroute + ping combined
+    bmon             # live bandwidth monitor per interface
+    wavemon          # `wavemon` — live ncurses WiFi signal dashboard (dBm graph),
+                     # for walking around to check range/coverage
   ];
 
   # ============================================================
@@ -221,6 +320,38 @@
   #     host    all       all   ::1/128       trust
   #   '';
   # };
+
+  # ============================================================
+  # POSTGRESQL — local dev database server (2026-09-10)
+  # ============================================================
+  # Enabled for PgAdminHaru (a local Postgres admin UI project) and any
+  # future local-dev tools that need a real Postgres instance — kept
+  # separate from the n8n block above, which is still disabled and
+  # wants its own TCP/trust setup for a non-interactive `n8n` role.
+  #
+  # AUTH: no override here, so NixOS's module default authentication
+  # applies — `local all all peer` for the Unix socket. Peer auth maps
+  # your OS user to a same-named Postgres role with no password, which
+  # is exactly what ensureUsers.harua below creates. Apps connect via
+  # the socket at /run/postgresql (PGHOST=/run/postgresql, PGUSER=harua,
+  # no PGPASSWORD) rather than over TCP — nothing is listening on the
+  # network by default (enableTCPIP is false), so there's nothing to
+  # firewall or expose accidentally.
+  #
+  # ensureUsers/ensureClauses only apply the FIRST time the role doesn't
+  # already exist — safe to leave declared permanently, re-running never
+  # touches an existing role's password or privileges.
+  services.postgresql = {
+    enable = true;
+    package = pkgs.postgresql_16;
+    ensureUsers = [
+      {
+        name = "harua";
+        ensureClauses.login = true;
+        ensureClauses.superuser = true;
+      }
+    ];
+  };
 
   # ============================================================
   # TOR — Anonymous Network Client

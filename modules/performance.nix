@@ -220,6 +220,21 @@
     # ~50 ms delay and sometimes generates spurious IRQ warnings in dmesg.
     "i8042.nopnp"
     "i8042.nomux"
+
+    # BUG FIX: Spotify (Electron/Chromium) randomly crashing and silently
+    # relaunching itself mid-track — confirmed via journalctl (2026-09-01):
+    # every time it happened, the kernel logged "x86/split lock detection:
+    # #AC: <thread> took a split_lock trap" on Spotify's own threads
+    # (.spotify-wrappe, Core Thread, Desktop EventService, Network Thread,
+    # Media Mixer Renderer) within milliseconds of the process restarting.
+    # This is a known troublemaker on 12th/13th-gen Intel (this CPU: i5-13420H
+    # Raptor Lake) — Chromium/V8 does unaligned atomic memory ops that trip
+    # the kernel's bus-lock guard. Default mode is "warn" (should not be
+    # fatal), but disabling it entirely is the standard workaround for this
+    # exact "Electron app randomly restarts" symptom. No security impact for
+    # a desktop machine — this only affects a performance/DoS mitigation for
+    # a rare local attack class, not a real protection boundary here.
+    "split_lock_detect=off"
   ];
 
   # ============================================================
