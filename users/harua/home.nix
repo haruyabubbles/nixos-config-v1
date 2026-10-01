@@ -803,16 +803,84 @@
   # EasyEffects sink vs. the DAC output, see ~/Downloads/Audio). A second
   # preset, MyNoMessy1, was dropped — it was byte-identical to IDK2 except
   # for plugin order, a leftover from experimenting.
+  #
+  # COMMUNITY PRESETS (easyeffects/community + community-input): a grab
+  # bag pulled from https://github.com/wwmm/easyeffects/wiki/Community-Presets
+  # for experimenting with the DSP chain — genre EQs, bass/loudness tuning,
+  # HeSuVi/HRTF virtual-surround convolver presets, dialogue boosters, one
+  # mic/input preset. Every *.json in both folders is picked up
+  # automatically and exposed as a selectable preset; IDK2 stays the one
+  # that actually loads at login (`preset = "IDK2"` below). Switch between
+  # the rest from the EasyEffects preset dropdown, or:
+  #   easyeffects --load-preset "<name>"
+  # Sources, for attribution/updates:
+  #   p-chan5/EasyPulse            — 16 genre-tuned headphone EQs
+  #   Rabcor/Heavy-Bass-EE         — 4 bass-enhancement presets (NOTE: pre-v7
+  #                                  preset schema, plugin keys have no "#0"
+  #                                  suffix — if one of these 4 doesn't show
+  #                                  up right, re-save it once through
+  #                                  EasyEffects' own Import Preset dialog
+  #                                  to trigger its legacy-format migration)
+  #   M0Rf30/easyeffects-presets   — 72 presets: HeSuVi virtual surround,
+  #                                  SOFA/HRTF binaural, dialogue/loudness/
+  #                                  immersive. Ships its own 57 IR/SOFA
+  #                                  files (in easyeffects/irs), merged
+  #                                  alongside the hand-tuned kernels below
+  #                                  so these actually have something to
+  #                                  convolve with, not just orphaned
+  #                                  kernel-name references.
+  #   Digitalone1/EasyEffects-Presets — 6 loudness-equalizer variants
+  #   jtrv gist                   — 1 input preset: NPR-style voice tuning
+  #                                  + noise reduction (community-input/)
   services.easyeffects = {
     enable = true;
     preset = "IDK2";
-    extraPresets.IDK2 = builtins.fromJSON (builtins.readFile ./easyeffects/IDK2.json);
+    extraPresets =
+      let
+        presetDirs = [ ./easyeffects/community ./easyeffects/community-input ];
+        presetsIn = dir:
+          map
+            (name: lib.nameValuePair (lib.removeSuffix ".json" name)
+              (builtins.fromJSON (builtins.readFile (dir + "/${name}"))))
+            (builtins.attrNames (builtins.readDir dir));
+      in
+      lib.listToAttrs (lib.concatMap presetsIn presetDirs) // {
+        IDK2 = builtins.fromJSON (builtins.readFile ./easyeffects/IDK2.json);
+        # S12-Ultra: purpose-built for the Letshuoer S12 Ultra IEM. Same EQ
+        # correction curve as IDK2 (verified identical band-for-band against
+        # ~/Downloads/s12ultra-19band-chain-matched.txt) but a trimmed chain
+        # (autogain → loudness → EQ → crossfeed[bypassed] → convolver →
+        # limiter, no compressor/multiband gate) tuned for low latency:
+        # Loudness and EQ both in IIR mode (no FIR/FFT block delay), limiter
+        # lookahead capped at 5 ms. Convolver kernel is 01-ambience-tiny.
+        "S12-Ultra" = builtins.fromJSON (builtins.readFile ./easyeffects/S12-Ultra.json);
+        # S12-Ultra+: the "veteran, everything on" version of S12-Ultra.
+        # Keeps autogain, the S12 Ultra 19-band correction, and the limiter
+        # from S12-Ultra; the bass_enhancer/multiband_compressor/exciter/
+        # stereo_tools/crossfeed values are lifted as-is from the community
+        # "Aurora Immersive" preset (easyeffects/community/) rather than
+        # guessed. Crossfeed is enabled this time (feed 4.5, vs. bypassed in
+        # S12-Ultra), and the convolver kernel is switched from the subtle
+        # 01-ambience-tiny room IR to synthetic-head-large.sofa — real HRTF
+        # binaural convolution, the actual "3D surround over headphones"
+        # technique, rather than a small-room reverb-ish IR. A second,
+        # smaller equalizer (equalizer#1) sits at the very end of the chain
+        # as a final tonal polish pass, separate from the corrective
+        # equalizer#0. No reverb: stacking reverb on top of an HRTF
+        # convolver smears the same space twice — picking one is the more
+        # deliberate choice. Full order: filter → autogain → loudness →
+        # equalizer#0 → bass_enhancer → multiband_compressor → exciter →
+        # stereo_tools → crossfeed → convolver → equalizer#1 → limiter →
+        # level_meter.
+        "S12-Ultra+" = builtins.fromJSON (builtins.readFile ./easyeffects/S12-Ultra+.json);
+      };
   };
 
-  # Convolver impulse-response kernels used by IDK2's Convolver plugin
-  # (kernel-name "01-11"). EasyEffects loads these from
-  # $XDG_DATA_HOME/easyeffects/irs — committing them here means a clean
-  # install has the exact room/plate/hall responses back immediately,
+  # Convolver impulse-response kernels: the original hand-tuned set used by
+  # IDK2 (kernel-name "01-11") plus M0Rf30's 57-file IR/SOFA bundle that
+  # backs its HeSuVi/HRTF community presets above. EasyEffects loads these
+  # from $XDG_DATA_HOME/easyeffects/irs — committing them here means a
+  # clean install has every room/plate/hall/HRTF response back immediately,
   # instead of only living in ~/.local/share (never backed up, never
   # reproduced by the flake).
   xdg.dataFile =

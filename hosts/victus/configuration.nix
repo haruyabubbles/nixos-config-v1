@@ -53,6 +53,9 @@
       #   - gpu-info summary command
       ../../modules/gpu-switch.nix
 
+      # Waydroid — Android container for apps with no native Linux build (e.g. LokLok)
+      ../../modules/waydroid.nix
+
       # NNN desktop stack: Niri + Noctalia + greetd
       # Replaces the old Cinnamon + LightDM setup.
       ../../modules/desktop/nnn.nix

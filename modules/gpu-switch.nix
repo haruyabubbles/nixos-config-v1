@@ -180,8 +180,8 @@
   # ONLY enable these lines if you switch to PRIME Offload mode.
   # In PRIME Sync mode they have no effect and cause a log warning.
   #
-  # hardware.nvidia.powerManagement.enable = true;
-  # hardware.nvidia.powerManagement.finegrained = true;
+  hardware.nvidia.powerManagement.enable = true;
+  hardware.nvidia.powerManagement.finegrained = true;
 
   # ============================================================
   # NOTES FOR SWITCHING MODES

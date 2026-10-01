@@ -87,12 +87,12 @@
       # PRIME Offload mode — disabled.
       # In offload mode you'd need to explicitly tag each app you want
       # to run on the NVIDIA GPU. We use Sync mode instead (below).
-      offload.enable = false;
+      offload.enable = true;
 
       # The `nvidia-offload` helper command — disabled because offload
       # mode itself is disabled. This would add a convenience wrapper
       # that sets the required environment variables automatically.
-      offload.enableOffloadCmd = false;
+      offload.enableOffloadCmd = true;
 
       # PRIME Sync mode — enabled.
       # The NVIDIA GPU renders all frames; the Intel iGPU's display
@@ -102,7 +102,7 @@
       #   - Full NVIDIA performance for all apps automatically
       #   - Required for Wayland to work with NVIDIA on this laptop
       # Drawback: higher idle power draw (NVIDIA GPU never sleeps)
-      sync.enable = true;
+      sync.enable = false;
 
       # PCI bus addresses of each GPU.
       # Find yours with: lspci | grep -E "VGA|3D"
