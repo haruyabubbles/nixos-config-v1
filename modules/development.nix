@@ -111,7 +111,7 @@ in
                      # (unfree; fixes "plays one song then dies" bug — see `let` above)
     telegram-desktop # Telegram messenger desktop client
     vesktop          # Voice/text chat for gaming and communities (unfree)
-    Discord
+    discord
 
     # ----------------------------------------------------------
     # EDITORS & VERSION CONTROL

@@ -44,6 +44,13 @@
     glow        # render Markdown beautifully in the terminal (README files, etc.)
     delta       # syntax-highlighted diff viewer (used by git below)
     yazi        # terminal file manager with image preview (Wayland + kitty protocol)
+
+    # Rootless XWayland proxy for niri. Niri (unlike Hyprland/Sway) has no
+    # built-in Xwayland support, so X11-only apps (Java/Swing apps like
+    # Ghidra, some games, legacy GTK2 tools) can't open a window at all
+    # without this running. See the systemd.user.services.xwayland-satellite
+    # unit below, and the DISPLAY sessionVariable in modules/desktop/nnn.nix.
+    xwayland-satellite
   ];
 
   # ============================================================
@@ -692,6 +699,32 @@
   #   }
   #
   # Find your output names with: wlr-randr
+  # ============================================================
+  # XWAYLAND-SATELLITE — Rootless Xwayland Proxy for Niri
+  # ============================================================
+  # Niri has no built-in Xwayland (unlike wlroots compositors such as
+  # Hyprland/Sway). Without this running, any X11-only app — including
+  # Java/Swing GUIs like Ghidra — fails to launch with:
+  #   "ERROR: Unable to launch Ghidra GUI application in headless environment."
+  # xwayland-satellite starts its own nested X server on the display given
+  # below and bridges X11 clients into Wayland windows. DISPLAY is set to
+  # match in modules/desktop/nnn.nix's environment.sessionVariables so X11
+  # apps find it automatically — no need to export DISPLAY by hand.
+  systemd.user.services.xwayland-satellite = {
+    Unit = {
+      Description = "Rootless Xwayland proxy (X11 app support for niri)";
+      PartOf      = [ "graphical-session.target" ];
+      After       = [ "graphical-session.target" ];
+    };
+    Install = {
+      WantedBy = [ "graphical-session.target" ];
+    };
+    Service = {
+      ExecStart = "${pkgs.xwayland-satellite}/bin/xwayland-satellite :0";
+      Restart   = "on-failure";
+    };
+  };
+
   systemd.user.services.kanshi = {
     Unit = {
       Description = "Kanshi automatic display configuration";

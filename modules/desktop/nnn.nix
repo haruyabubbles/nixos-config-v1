@@ -230,6 +230,13 @@
     # gives acceptable HiDPI behaviour.
     _JAVA_AWT_WM_NONREPARENTING = "1";
 
+    # Point all X11-only apps (Java/Swing, legacy GTK2, etc.) at the
+    # xwayland-satellite proxy started by the user's systemd service
+    # (users/harua/home.nix: systemd.user.services.xwayland-satellite).
+    # Niri has no built-in Xwayland, so without this + that service,
+    # X11 apps fail outright instead of falling back gracefully.
+    DISPLAY = ":0";
+
     # CLUTTER: use the Wayland backend (for GNOME apps that use Clutter).
     CLUTTER_BACKEND = "wayland";
 
