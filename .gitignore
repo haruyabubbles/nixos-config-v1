@@ -1,0 +1,23 @@
+# This is a comment (Git ignores these lines)
+
+# Ignore a specific file
+secret_config.json
+
+# Ignore a specific folder and all its contents (include the trailing slash)
+node_modules/
+dist/
+
+# Ignore all files ending with a specific extension (using a wildcard)
+*.log
+*.tmp
+ahb-databases-build.sh
+ahb-dbcreate-fix.sh
+ahb-dbtest-cleanup.sh
+ahb-dbtest-unit-cleanup.sh
+ahb-exitstatus-fix.sh
+ahb-react-restart.sh
+ahb-starfire-sudo-fix.sh
+ahb-sudopath-fix.sh
+
+# Exception: Ignore all .log files, BUT track this specific one
+!important.log

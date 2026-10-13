@@ -151,6 +151,8 @@ in
     gimp             # GNU Image Manipulation Program — raster image editor
     krita            # Digital painting / illustration app
     obs-studio       # Screen recording and live streaming software
+    freecad          # Parametric 3D CAD — cad project (housing, chassis, internals)
+    blender          # 3D renders of the finished model (optional, large)
 
     # ----------------------------------------------------------
     # MEDIA PLAYBACK
@@ -256,6 +258,8 @@ in
     # PRIVACY / VPN
     # ----------------------------------------------------------
     proton-vpn-cli   # ProtonVPN command-line client
+    wireguard-tools  # wg-quick etc. — needed to use ProtonVPN's downloadable WireGuard configs
+                     # (free plan's CLI has no location switching; manual configs are the workaround)
     tor              # Tor anonymity network CLI and libraries
     torsocks         # Wrapper to route any app's TCP through Tor (`torsocks curl ...`)
 

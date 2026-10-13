@@ -21,6 +21,15 @@
   home.stateVersion = "26.05";
 
   # ============================================================
+  # SESSION PATH
+  # ============================================================
+  # Adds ~/.local/bin to PATH for every session type home-manager
+  # manages (bash login shells AND the systemd user/graphical
+  # session), so scripts dropped there (e.g. freecad-x11) are found
+  # without each shell config needing its own PATH= line.
+  home.sessionPath = [ "$HOME/.local/bin" ];
+
+  # ============================================================
   # USER PACKAGES
   # ============================================================
   # NOTE: Most system tools (eza, bat, fd, ripgrep, fzf, jq, curl, wget,
@@ -51,6 +60,13 @@
     # without this running. See the systemd.user.services.xwayland-satellite
     # unit below, and the DISPLAY sessionVariable in modules/desktop/nnn.nix.
     xwayland-satellite
+
+    # Minecraft: Java Edition launcher. Manages Forge/Fabric/Quilt
+    # instances, logs in via Microsoft OAuth device flow (legit
+    # purchased account), imports CurseForge/Modrinth modpacks.
+    # Bedrock Edition has no real Linux launcher and can't load
+    # Forge/Fabric mods at all, so this covers Java only.
+    prismlauncher
   ];
 
   # ============================================================

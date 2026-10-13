@@ -68,6 +68,22 @@
       # Font packages and fontconfig tuning (JetBrains Mono NF, Noto, Inter, etc.)
       ../../modules/font.nix
 
+      # Minecraft server: Fabric/Forge, version/mods managed by hand in
+      # /var/lib/minecraft, exposed to the internet on 25565/tcp
+      ../../modules/minecraft-server.nix
+
+      # AerieHostingBubbles control panel: dedicated service user + the
+      # one trusted privileged helper script (aeriehosting-ctl) it uses to
+      # control minecraft-server.service and /var/lib/minecraft's files
+      ../../modules/aeriehosting.nix
+
+      # WiFi hotspot that routes all client traffic through the
+      # ProtonVPN WireGuard tunnel (not the real Ethernet uplink),
+      # with a kill-switch so clients lose internet rather than leak
+      # the real IP if the VPN drops. See the module for the one-time
+      # manual setup steps (moving the WG config, creating the hotspot).
+      ../../modules/vpn-hotspot.nix
+
       # Uncomment to enable gaming packages (Steam, Lutris, etc.)
       #../../modules/game.nix
     ];
