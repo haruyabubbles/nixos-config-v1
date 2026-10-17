@@ -160,6 +160,15 @@ in
     vlc              # Versatile media player — plays almost any format
     mpv              # Lightweight, scriptable media player (used by ani-cli)
     ani-cli          # CLI tool to stream anime from the terminal via mpv
+    pear-desktop     # YT Music Electron client (nixpkgs renamed youtube-music
+                     # -> pear-desktop) — has a built-in Discord Rich
+                     # Presence plugin (Settings > Plugins > Discord), shows
+                     # "Listening to ___" like Spotify. PreMiD has no Linux
+                     # build at all, so this is the real alternative.
+    mprisence        # Discord Rich Presence daemon built on Linux MPRIS.
+                     # Its browser bridge (mprisence web install) covers
+                     # plain youtube.com, not just YT Music — PreMiD-style
+                     # "Watching ___" for any browser tab.
 
     # ----------------------------------------------------------
     # GAMING

@@ -112,9 +112,26 @@
         # LDAC), and most USB audio devices. Using 48 kHz avoids resampling
         # for the majority of audio sources.
         "default.clock.rate"        = 48000;
-        "default.clock.allowed-rates" = [ 44100 48000 88200 96000 ];
-        # Allow PipeWire to switch to the source's native rate when possible,
-        # minimising resampling entirely.
+        # BUG FIX (2026-10-13): audio "jumping"/dropouts whenever Discord
+        # played a notification sound, reproducible regardless of whether
+        # the mic/speakers were Bluetooth, USB, wired, or the laptop's
+        # built-in hardware — meaning it was a graph-wide issue, not a
+        # per-device one (ruled out Bluetooth HSP/HFP profile switching).
+        #
+        # Root cause: allowing multiple rates here lets PipeWire dynamically
+        # RECLOCK THE ENTIRE GRAPH (every sink and source, not just the new
+        # stream) whenever a client opens a stream at a different native
+        # rate than the current graph clock. Discord's notification sounds
+        # are commonly encoded at 44100 Hz (or lower) while voice chat /
+        # music run the graph at 48000 Hz — every notification triggered a
+        # live reclock, which is audible as a pop/stutter/dropout on ALL
+        # active streams simultaneously (mic input included).
+        #
+        # Fix: pin the graph to a single rate. PipeWire still plays
+        # 44.1 kHz content fine — it just resamples it in software to
+        # 48 kHz instead of switching the shared hardware clock, so the
+        # graph itself never reclocks mid-session.
+        "default.clock.allowed-rates" = [ 48000 ];
 
         # ---- Buffer size (latency vs stability tradeoff) -----------
         # 512 @ 48 kHz = 10.67 ms latency. Good desktop balance.
@@ -341,6 +358,46 @@
             actions = {
               update-props = {
                 "session.suspend-timeout-seconds" = 0;
+              };
+            };
+          }
+        ];
+      };
+
+      # ---- Global per-app stream suspend fix (2026-10-13) ------------
+      # BUG: pausing ANY one audio stream (one of several Firefox tabs,
+      # a Discord notification finishing, etc.) caused EVERY other stream
+      # to glitch silent for 1-2 seconds, then resume — reproducible with
+      # zero EasyEffects involvement, identical on every piece of hardware
+      # tested (ruled out Bluetooth/USB/built-in device causes, ruled out
+      # EasyEffects). Timing (a couple of seconds) matches WirePlumber's
+      # default idle-suspend timeout exactly.
+      #
+      # Root cause: "20-suspend-timeout" and "21-stream-suspend-timeout"
+      # above only stop the physical SINK node (the hardware output
+      # device) from suspending. They say nothing about the per-app
+      # STREAM nodes (media.class Stream/Output/Audio — one per playing
+      # tab/app, and Stream/Input/Audio for mic input). Those were still
+      # using WirePlumber's default idle-suspend behaviour. When a stream
+      # goes idle (tab paused, notification sound finishes) and later
+      # suspends, PipeWire has to re-elect which node drives the shared
+      # graph clock and renegotiate the quantum for every remaining node
+      # — audible as a brief dropout across ALL streams sharing that
+      # sink, not just the one that paused. This is the same underlying
+      # mechanism as the Spotify "15-spotify-fix" rule above, which only
+      # ever covered Spotify specifically; this generalises it to every
+      # app's stream nodes system-wide.
+      "22-global-stream-suspend-timeout" = {
+        "node.rules" = [
+          {
+            matches = [
+              { "media.class" = "Stream/Output/Audio"; }
+              { "media.class" = "Stream/Input/Audio"; }
+            ];
+            actions = {
+              update-props = {
+                "session.suspend-timeout-seconds" = 0;
+                "node.pause-on-idle" = false;
               };
             };
           }

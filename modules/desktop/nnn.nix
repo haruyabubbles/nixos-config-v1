@@ -183,6 +183,26 @@
     config.common.default = lib.mkForce [ "gtk" ];
   };
 
+  # xdg-desktop-portal-gnome self-disables ScreenCast/Screenshot/RemoteDesktop
+  # (falls back to "exposing settings only", AvailableSourceTypes=0) whenever
+  # it sees GDK_BACKEND set in its environment — this is a deliberate check in
+  # its own source, logged as "GDK backend forced via env var, portal dialogs
+  # will not work properly" followed by "Non-compatible display server,
+  # exposing settings only." Below, `environment.sessionVariables` sets
+  # GDK_BACKEND (and DISPLAY, for xwayland-satellite) globally, and NixOS
+  # propagates sessionVariables into the systemd --user manager's environment,
+  # which every user unit inherits by default — including this portal. Niri
+  # itself correctly exposes org.gnome.Mutter.ScreenCast on the session bus,
+  # so the "gnome" backend choice above is right; it just needs these two
+  # inherited vars stripped from *its own* unit so its display detection
+  # isn't fooled. This is what makes OBS's "Screen Capture (PipeWire)" source
+  # show up in Add Source at all — OBS queries AvailableSourceTypes at
+  # startup and omits the source entirely when it comes back empty.
+  systemd.user.services.xdg-desktop-portal-gnome.serviceConfig.UnsetEnvironment = [
+    "GDK_BACKEND"
+    "DISPLAY"
+  ];
+
   # ============================================================
   # WAYLAND + NVIDIA ENVIRONMENT VARIABLES
   # Set for every user session on the machine.

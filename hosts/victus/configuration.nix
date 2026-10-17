@@ -215,6 +215,25 @@
   services.udev.extraRules = ''
     ACTION=="add", SUBSYSTEM=="net", KERNEL=="en*", ATTR{power/control}="on"
     ACTION=="add", SUBSYSTEM=="net", KERNEL=="wl*", ATTR{power/control}="on"
+
+    # BUG FIX (2026-10-13): LETSHUOER DT01 PRO USB DAC (and any other USB
+    # audio device on this port) silently dropping out every 30-90s, going
+    # fully silent until it re-enumerates. Confirmed via journalctl -k: every
+    # drop is preceded by "xhci_hcd 0000:00:14.0: Event dma ... status 1 not
+    # part of TD" immediately followed by "usb 3-4: USB disconnect". That is
+    # an xHCI transfer-ring desync on an isochronous endpoint (audio class
+    # devices stream isochronously) — not a bad cable. Root cause: the xHCI
+    # *controller's own* PCI runtime power management was "auto"
+    # (/sys/bus/pci/devices/0000:00:14.0/power/control), so the kernel was
+    # letting the controller itself drop to a low-power state between
+    # isochronous packets, corrupting the ring and forcing a full USB reset.
+    # The USB device's own power/control was already "on" — this is a
+    # separate, PCI-level knob for the host controller, not the device.
+    # Forcing it to "on" keeps the controller awake so it stops happening.
+    # 0000:00:14.0 is this laptop's (Raptor Lake-P) combined USB2/3 xHCI
+    # controller (buses 3 and 4 in lsusb -t) — re-check with
+    # `readlink -f /sys/bus/usb/devices/3-4` if the DAC ever moves ports.
+    ACTION=="add", SUBSYSTEM=="pci", KERNEL=="0000:00:14.0", ATTR{power/control}="on"
   '';
 
   # Disable WiFi power-save at the NetworkManager level too.
@@ -313,6 +332,15 @@
     openFirewall = true;
   };
 
+  # Avahi is socket-activated and sometimes exits (killed via SIGHUP)
+  # without cleaning up its own /run/avahi-daemon/pid. A stale pidfile
+  # then makes openresolv's avahi-daemon libc hook `kill` a nonexistent
+  # process every time anything runs `resolvconf` (wg-quick up/down,
+  # NetworkManager's hotspot, etc.) — that failure is fatal under
+  # wg-quick's `set -e` and tears down the WireGuard interface it just
+  # built. Remove the pidfile on stop so the hook finds nothing to signal.
+  systemd.services.avahi-daemon.serviceConfig.ExecStopPost = "${pkgs.coreutils}/bin/rm -f /run/avahi-daemon/pid";
+
   # Tailscale — mesh VPN. Allows secure access to other Tailscale
   # nodes (home server, VMs, etc.) without port forwarding.
   services.tailscale.enable = true;
@@ -342,7 +370,42 @@
 
   # Firefox — system-wide install for the NixOS policy wrapper and
   # native messaging hosts (e.g. for extensions needing system access).
-  programs.firefox.enable = true;
+  programs.firefox = {
+    enable = true;
+
+    # BUG FIX (2026-10-13): pausing one YouTube tab made every other tab's
+    # audio drop out (video kept playing), and resuming the paused tab got
+    # stuck in an infinite buffering spinner until a full page reload.
+    #
+    # Root cause: modules/desktop/nnn.nix sets LIBVA_DRIVER_NAME=nvidia and
+    # NVD_BACKEND=direct globally so Firefox hardware-decodes video via
+    # nvidia-vaapi-driver on the NVIDIA dGPU. That driver has multiple open
+    # upstream bugs (elFarto/nvidia-vaapi-driver #44, #216, #253) where
+    # pausing/resuming or backgrounding a tab corrupts the decoder's state
+    # — exactly this symptom. Firefox decodes video for ALL tabs through
+    # one shared decoder process, so one tab's corrupted decode state
+    # glitches/stalls audio on every other tab sharing it too.
+    #
+    # Fix: force Firefox to software-decode video instead of touching
+    # nvidia-vaapi-driver at all. This is Firefox-only — mpv, VLC, and
+    # everything else still gets NVIDIA hardware decode via the global
+    # env vars in nnn.nix. Costs some CPU on 4K video; YouTube at 1080p
+    # is trivial for a modern CPU to decode in software.
+    preferences = {
+      "media.hardware-video-decoding.enabled" = false;
+
+      # Mitigation for a long-running Firefox/YouTube bug (Mozilla bugzilla
+      # 1878510 and related): pausing a video can desync YouTube's MSE
+      # buffering state, Firefox gets stuck waiting on a media segment that
+      # never arrives, and the player spins forever until a reload/seek.
+      # This pref stops Firefox from suspending a backgrounded/paused
+      # video's decoder, which is what triggers the desync in most reports.
+      # Not a NixOS/system bug — this travels with any Firefox install on
+      # any OS — but declaring it here means it's on by default on a fresh
+      # install too, instead of a manual about:config step to remember.
+      "media.suspend-bkgnd-video.enabled" = false;
+    };
+  };
 
   # Steam — gaming platform. openFirewall opens ports for Remote Play
   # and dedicated server discovery on the LAN.

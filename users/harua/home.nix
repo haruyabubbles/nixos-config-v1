@@ -111,6 +111,9 @@
       background_opacity         = "0.6";
       dynamic_background_opacity = "yes";
       background_blur            = 1;
+      # Dim/faint text (inactive tabs, hints) was fading into the blurred
+      # wallpaper on top of background_opacity — render it at full opacity.
+      dim_opacity                = "1.0";
       # Hide kitty's own title bar — niri/noctalia handle window decorations.
       hide_window_decorations    = "yes";
 
@@ -741,6 +744,32 @@
     };
   };
 
+  # ============================================================
+  # MPRISENCE — Discord Rich Presence for MPRIS media (incl. YouTube)
+  # ============================================================
+  # mprisence itself is in modules/development.nix. This unit just keeps
+  # it running persistently instead of needing a manual launch every
+  # login (its CLI has no `autostart` subcommand as of 1.7.0, despite
+  # the upstream README describing one — so this hand-rolled unit
+  # stands in for it). One-time manual steps still required after
+  # rebuild: `mprisence web install`, install the "mprisence bridge"
+  # extension for your browser, then `mprisence web doctor` to verify.
+  systemd.user.services.mprisence = {
+    Unit = {
+      Description = "Discord Rich Presence for MPRIS media players";
+      PartOf      = [ "graphical-session.target" ];
+      After       = [ "graphical-session.target" ];
+    };
+    Install = {
+      WantedBy = [ "graphical-session.target" ];
+    };
+    Service = {
+      ExecStart = "${pkgs.mprisence}/bin/mprisence";
+      Restart   = "on-failure";
+      RestartSec = "10s";
+    };
+  };
+
   systemd.user.services.kanshi = {
     Unit = {
       Description = "Kanshi automatic display configuration";
@@ -771,6 +800,23 @@
       };
     };
   };
+
+  # ============================================================
+  # MPRISENCE CONFIG — un-ignore plain YouTube
+  # ============================================================
+  # mprisence's bundled default (config/config.default.toml, compiled into
+  # the binary) explicitly sets [web_player.youtube] ignore = true — same
+  # treatment it gives Spotify, presumably because Discord already has
+  # native Spotify RPC. YouTube has no such native path, so that default
+  # just silently kills "Watching ___" presence with no in-app toggle to
+  # undo it (confirmed live: `mprisence players list` showed the youtube
+  # web-bridge player as "[playing, ignored]" while Discord showed
+  # nothing). User config merges on top of the bundled default, so this
+  # one key is enough to turn it back on.
+  xdg.configFile."mprisence/config.toml".text = ''
+    [web_player.youtube]
+    ignore = false
+  '';
 
   # ============================================================
   # SPOTIFY FLAGS — belt-and-suspenders for the audio-api fix

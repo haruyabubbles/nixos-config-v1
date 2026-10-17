@@ -62,6 +62,50 @@
 { pkgs, ... }:
 
 {
+  environment.systemPackages = [
+    # hotspot-status: who's connected to the hotspot, their signal/speed,
+    # and whether the VPN + kill-switch are actually up.
+    # Usage: hotspot-status
+    (pkgs.writeShellScriptBin "hotspot-status" ''
+      echo "── Hotspot (wlo1) ──────────────────────"
+      ${pkgs.networkmanager}/bin/nmcli -f GENERAL.STATE,GENERAL.CONNECTION device show wlo1 2>/dev/null \
+        | sed 's/^/  /'
+      echo ""
+
+      echo "── Connected clients (iw station dump) ──"
+      if ${pkgs.iw}/bin/iw dev wlo1 station dump 2>/dev/null | grep -q .; then
+        ${pkgs.iw}/bin/iw dev wlo1 station dump | sed 's/^/  /'
+      else
+        echo "  (no clients connected, or need sudo — try: sudo hotspot-status)"
+      fi
+      echo ""
+
+      echo "── DHCP leases (MAC -> IP / hostname) ───"
+      if [ -r /var/lib/NetworkManager/dnsmasq-wlo1.leases ]; then
+        awk '{print "  "$2" -> "$3" ("$4")"}' /var/lib/NetworkManager/dnsmasq-wlo1.leases
+      else
+        echo "  (no lease file yet — no one has connected)"
+      fi
+      echo ""
+
+      echo "── ProtonVPN tunnel (CAFREE-14) ─────────"
+      if ${pkgs.iproute2}/bin/ip link show CAFREE-14 &>/dev/null; then
+        ${pkgs.wireguard-tools}/bin/wg show CAFREE-14 2>/dev/null | sed 's/^/  /' \
+          || echo "  up, but need sudo to see handshake/transfer — try: sudo hotspot-status"
+      else
+        echo "  DOWN — hotspot clients' traffic is NOT protected right now"
+      fi
+      echo ""
+
+      echo "── Kill-switch (hotspot_killswitch table) ─"
+      if ${pkgs.nftables}/bin/nft list table inet hotspot_killswitch &>/dev/null; then
+        echo "  active"
+      else
+        echo "  NOT active (need sudo to check, or service isn't running) — try: sudo hotspot-status"
+      fi
+    '')
+  ];
+
   # Declarative, but NOT auto-started (autostart = false): you decide
   # when the VPN comes up, same as the manual `wg-quick up` workflow you
   # already had, except now it's a stable systemd unit

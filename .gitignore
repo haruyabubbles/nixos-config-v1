@@ -6,10 +6,13 @@ secret_config.json
 # Ignore a specific folder and all its contents (include the trailing slash)
 node_modules/
 dist/
+result
 
 # Ignore all files ending with a specific extension (using a wildcard)
 *.log
 *.tmp
+
+CHEATSHEET.md
 ahb-databases-build.sh
 ahb-dbcreate-fix.sh
 ahb-dbtest-cleanup.sh
